@@ -120,18 +120,40 @@ Cada uno con `bin/open-pr.sh`. Por orden de "facilidad de merge":
 
 ## Estado al cierre del proceso (objetivo realista)
 
-`local/customizations` debería terminar con **5-6 commits permanentes**:
+`local/customizations` deberia terminar con **5-6 commits permanentes**:
 
 1. `[LOCAL-ONLY] add upgrade tooling, runbook and audit docs` ✅
 2. `[LOCAL-ONLY] open-pr.sh: detect fork owner, idempotent re-runs, auto-create PR` ✅
 3. `[LOCAL-ONLY] track PR #210 (webui error toasts)` ✅
 4. `[LOCAL-ONLY] add MIGRATION_INVENTORY.md` ✅
-5. `[LOCAL-ONLY] feat(callng): LIBRE_DEFAULT_ROUTING_TABLE` ⏳
-6. (eventual) `[LOCAL-ONLY] split de callng/callfunc.lua para parte client-specific` ⏳
+5. `[LOCAL-ONLY] feat(callng): LIBRE_DEFAULT_ROUTING_TABLE` ✅
+6. `[LOCAL-ONLY] deploy.sh: --stage-only flag and Lua syntax smoke test` ✅
+7. `[LOCAL-ONLY] fix(callng+deploy): LIBRE_DEFAULT_ROUTING_TABLE via os.getenv + FS callng symlinks` ✅
+8. `[LOCAL-ONLY] fix(callng): determine_inbound_connection - real Redis lookup with CIDR matching` ✅
 
-Cualquier commit `[UPSTREAM-PR:#NNN]` para refactors grandes se descartará al
+Cualquier commit `[UPSTREAM-PR:#NNN]` para refactors grandes se descartara al
 rebasar contra upstream cuando el PR correspondiente mergee.
 
+## Estado real al 2026-05-07 (post validacion runtime)
+
+La rama `local/customizations` cuenta **10 commits sobre `upstream/master`**:
+
+- 4 commits de **tooling/docs** (1, 2, 3, 4 de la lista de arriba).
+- 4 commits de **feature LIBRE_DEFAULT_ROUTING_TABLE + determine_inbound_connection** (5, 6, 7, 8). Inicialmente fueron solo 2, pero la validacion runtime descubrio 3 bugs heredados de la rama vieja del cliente que requirieron 2 commits de fix adicionales. Ver `AUDITORIA_COMMITS.md` seccion "Validacion runtime de Fase B".
+- 2 commits de **migration inventory** y **docs intermedias**.
+
+**Validacion en runtime cerrada** ✅:
+- Deploy completo ejecutado 3 veces sin issues.
+- 7/7 casos de prueba CIDR pasando para `determine_inbound_connection`.
+- Servicios estables: liberator, nginx, redis activos.
+- Cleanup de `/opt/libresbc/`: deploy intermedio borrado, `v1.0.0` archivado, archivos cliente migrados a `/var/lib/libresbc-ops/`.
+
+### Camino hacia "rama LOCAL minima"
+
+Los 4 commits de la feature (5-8) son tecnicamente **upstream-PR-eables** (la funcion es generica, sin branding del cliente). Cuando el operador decida abrirlo como PR, esos 4 commits se reconvierten a 1-2 commits limpios y se postulan a `hnimminh/libresbc`. Si se aceptan upstream, se eliminan de `local/customizations` en el siguiente rebase.
+
+Objetivo realista a 6-12 meses: **rama de 4-5 commits** todos de tooling/docs.
+
 **Si todo va bien, en 6-12 meses la rama queda con 4-6 commits permanentes**, todos
-de tooling/docs/configuración explícitamente local — la deuda técnica quedaría
+de tooling/docs/configuracion explicitamente local — la deuda tecnica quedaria
 casi en cero.

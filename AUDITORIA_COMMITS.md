@@ -139,3 +139,74 @@ Accion post-deploy: opcionalmente limpiar las claves Redis `access:*` y `nameset
 
 **Lo que se descarta directamente** (no entra en `local/customizations` ni en PRs): commits `.`, garbage, docs internas, scripts de verificacion, JSONs del cliente (estos van a `/var/lib/libresbc-ops/`).
 
+---
+
+## Validacion runtime de Fase B (2026-05-07)
+
+Tras commitear `LIBRE_DEFAULT_ROUTING_TABLE` + `determine_inbound_connection` como `[LOCAL-ONLY]` y desplegar, encontramos **3 bugs heredados de la rama vieja** durante la validacion end-to-end:
+
+### Bug #1 — `freeswitch.getGlobalVariable("LIBRE_*")` siempre retornaba `nil`
+
+La rama vieja leia `LIBRE_DEFAULT_ROUTING_TABLE` con `freeswitch.getGlobalVariable(...)`. Pero **solo `NODEID` se setea como global de FS** via `X-PRE-PROCESS env-set` en `freeswitch.xml`. Las otras `LIBRE_*` no estan ahi ni se setean via `global_setvar` desde basemgr. Solo viven en el environment del proceso.
+
+La rama vieja "funcionaba" gracias a un fallback hardcoded `"Route_Issabel_to_Bicentenario"` (nombre del cliente). Por eso aparentaba andar. Mi version limpia (sin hardcoded) caia siempre a `nil`.
+
+**Fix**: cambiar a `os.getenv("LIBRE_DEFAULT_ROUTING_TABLE")`. Verificado contra `/proc/<pid_fs>/environ` que la variable SI llega al proceso de FS (heredada via libre.env -> systemd EnvironmentFile -> liberator -> Popen(freeswitch)).
+
+Commit: `39024fa` — `fix(callng+deploy): LIBRE_DEFAULT_ROUTING_TABLE via os.getenv + FS callng symlinks`.
+
+### Bug #2 — `nameset:intcon:in` NO EXISTE en Redis
+
+`determine_inbound_connection` original hacia `rdbconn:smembers('nameset:intcon:in')`. Pero ese set NO existe en LibreSBC ni en upstream ni en el cliente (`redis-cli SCAN --pattern nameset*` no lo muestra). Las keys reales son `intcon:in:<name>` directamente (hashes), iterables solo via SCAN sobre el patron.
+
+La rama vieja jamas matcheaba via lookup; siempre caia a `if sipprofile == "bicentenario_udp_profile" then return "from-bicentenario" elseif ... return "from-issabel"`. **Otra dependencia de fallback hardcoded del cliente.**
+
+**Fix**: SCAN sobre `intcon:in:*` con la sintaxis correcta de redfs-Lua (ver Bug #3).
+
+Commit: `9de4da6` — `fix(callng): determine_inbound_connection - real Redis lookup with CIDR matching`.
+
+### Bug #3 — Sintaxis de `rdbconn:scan(...)` incorrecta
+
+La sintaxis correcta del cliente Lua de Redis (heredada via redfs):
+
+```lua
+local next_cursor, keys = unpack(rdbconn:scan(0, {match="pattern:*", count=100}))
+```
+
+Pasar args sueltos (`rdbconn:scan(cursor, "match", PATTERN, "count", N)`) **no funciona**: siempre retorna batches vacios. Verificado contra `event.initiation.lua:15` que ya usaba la convencion correcta.
+
+### Bug #4 — `sipaddrs` son CIDR strings, no objetos
+
+`fieldjsonify(":list:192.168.36.5/32,10.0.0.0/24")` retorna `{"192.168.36.5/32", "10.0.0.0/24"}` — lista de strings. La rama vieja comparaba `addr.member == network_ip` lo cual nunca matcheaba porque `addr` no es una tabla.
+
+**Fix**: implementar CIDR matching IPv4 con `bit32` (Lua 5.2 standard). Hay rangos `/28` (`from-tma`: `10.128.60.0/28,10.128.60.16/28`) que requieren matching real, no solo string equality.
+
+### Bug #5 — Symlinks de FreeSWITCH apuntaban hardcoded a `v1.0.0`
+
+`/usr/local/share/freeswitch/scripts/callng` y `/usr/local/etc/freeswitch/scripts/callng` apuntaban a `/opt/libresbc/v1.0.0/callng`, no al deploy actual via el symlink raiz `/opt/libresbc/callng`. Resultado: tras un deploy, el codigo nuevo se copiaba a `vv1.0.1-12-...` pero FS seguia leyendo `v1.0.0`.
+
+**Fix**: `bin/deploy.sh` ahora normaliza esos symlinks apuntando a `/opt/libresbc/callng` (raiz). Asi se actualizan automaticamente con cada deploy. Tambien hay un `/etc/nginx -> /opt/libresbc/v1.0.0/third-party/nginx` con el mismo problema, pero como nginx no esta cambiando, lo dejamos para cuando aplique.
+
+### Validacion final
+
+Tras el redeploy con los 3 fixes:
+
+| Test                                    | Resultado |
+|-----------------------------------------|-----------|
+| 192.168.36.5 + bicentenario_udp_profile | `from-bicentenario` (match /32) |
+| 192.168.36.152 + issabel_udp_profile    | `from-issabel` (match /32) |
+| 10.128.60.5 + tma_udp_profile           | `from-tma` (match `10.128.60.0/28`) |
+| 10.128.60.20 + tma_udp_profile          | `from-tma` (match `10.128.60.16/28`) |
+| 10.128.60.32 + tma_udp_profile          | `nil` (fuera de los `/28`) |
+| 192.168.36.5 + issabel_udp_profile      | `nil` (perfil mismatch) |
+| 192.168.36.99 + bicentenario_udp_profile| `nil` (IP fuera del /32) |
+
+7/7 casos pasan. La funcion ahora es **realmente** un Redis lookup limpio y candidata a UPSTREAM-PR si se decide promoverla.
+
+### Aprendizaje de proceso
+
+Los commits originales del cliente "compilaban" pero **estaban rotos por dentro** — funcionaban solo por los fallbacks hardcoded de los nombres del cliente. Una validacion runtime tipo "abrir el motor y verificar que cada pieza realmente hace lo que dice" es **imprescindible** antes de aceptar cualquier reaplicacion. Lecciones para futuros features `[LOCAL-ONLY]`:
+
+1. Probar la funcion **directamente** con datos reales de Redis, no solo verificar que el deploy arranca.
+2. Ejecutar el codigo **en el contexto de FS+mod_lua**, no solo en un Lua standalone (las APIs `freeswitch.*` y `rdbconn.*` se cargan distinto).
+3. **`mod_lua` cachea require entre llamadas**, asi que tras editar `callng/*.lua` siempre `systemctl restart liberator` para que el cambio surta efecto.

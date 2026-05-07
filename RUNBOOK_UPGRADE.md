@@ -210,8 +210,38 @@ sudo systemctl enable --now libresbc-webui
 |----------------------------------------------------|----------------------------------------------------------|--------|
 | `liberator` no arranca tras deploy                 | Cambio breaking en `libre.env` upstream                  | `bin/deploy.sh --rollback`. Diff `libre.env` activo vs `build/ansible/roles/libre/templates/libre.j2.env`. |
 | Llamadas no rutean tras deploy                     | Schema de Redis cambio (ver upstream `440544e`)          | Revisar `liberator.log` y restaurar `redis-dump.rdb` del backup pre-sync. |
+| Cambios en `callng/*.lua` no toman efecto          | `mod_lua` cachea los `require` entre llamadas            | `systemctl restart liberator` (reinicia FS y limpia el cache). En el log se ven los nuevos `INFO module=callng, space=event:startup` tras el restart. |
+| FreeSWITCH carga la version vieja de `callng/`     | Symlink `/usr/local/{share,etc}/freeswitch/scripts/callng` apunta al deploy anterior | Verificar con `readlink -f`. `bin/deploy.sh` desde 2026-05 los normaliza a `/opt/libresbc/callng` (symlink raiz). |
+| `freeswitch.getGlobalVariable("LIBRE_*")` retorna `nil` | Solo `NODEID` se setea como global de FS via `X-PRE-PROCESS env-set` en `freeswitch.xml`. El resto solo esta como env var. | Usar `os.getenv("LIBRE_*")` desde Lua. La var llega via `EnvironmentFile=/opt/libresbc/libre.env` -> liberator -> `Popen(freeswitch)`. Verificar con `cat /proc/<pid_fs>/environ \| tr '\\0' '\\n' \| grep LIBRE_`. |
+| `rdbconn:scan(...)` retorna batches vacios         | Sintaxis incorrecta. La API en redfs/Lua es `:scan(cursor, {match=PATTERN, count=N})`, no args sueltos. | Usar el patron de `event.initiation.lua:15`: `local next, keys = unpack(rdbconn:scan(0, {match=PATTERN, count=SCAN_COUNT}))`. |
+| `addr.member` falla en lookups de `intcon:in:*`    | `sipaddrs` es `:list:CIDR1,CIDR2,...` (strings), NO objetos `{member=ip}`. `fieldjsonify` retorna lista de strings CIDR. | Comparar con CIDR matching real. Hay helpers `_ipv4_to_int` y `_ipv4_in_cidr` (usando `bit32`) en `callng/callfunc.lua` desde 2026-05. |
 | Rebase con conflictos en `liberator/libreapi.py`   | Cambios upstream sobre la misma area que un `LOCAL-ONLY` | Resolver a mano. Si el LOCAL-ONLY ya no aplica, considerar abrir PR upstream para que se absorba. |
 | `gh pr create` falla con `not authenticated`       | `gh auth` no esta hecho                                  | `gh auth login` con la cuenta del fork propio. |
+| `fs_cli` da `-ERR no reply` o `Error Connecting`   | Timeout default de 1500ms es muy corto en este sistema   | Usar `fs_cli -t 30000 -x '...'`. Password ESL: `LIBRESBC` (default cuando `libre.env` no setea `ESL_PASSWORD`). |
+
+### Sobre `mod_lua` y el cache de `require`
+
+`mod_lua` mantiene los modulos cargados en memoria entre llamadas. Eso hace que el primer cambio a `callng/callfunc.lua` o `callng/main.lua` tras un deploy NO se vea reflejado hasta que:
+
+1. Se hace `systemctl restart liberator` (lo cual reinicia FreeSWITCH como subproceso, y por tanto re-arranca `mod_lua` con los `.lua` frescos), o
+2. Se hace `fs_cli -x 'reload mod_lua'` (no funciona en este FS porque `mod_lua` esta marcado como no-unloadable). En este caso, opcion 1 es la unica.
+
+`bin/deploy.sh` ya hace `systemctl restart liberator` al final, asi que un deploy completo siempre toma el codigo nuevo. Pero un `cp` manual a `/opt/libresbc/callng/` SIN reiniciar **no surte efecto**.
+
+### Sobre los symlinks externos a `/opt/libresbc/`
+
+FreeSWITCH y otros modulos buscan callng en paths externos al runtime de LibreSBC:
+
+| Symlink                                            | Apunta a (actual)            |
+|----------------------------------------------------|------------------------------|
+| `/usr/local/share/freeswitch/scripts/callng`       | `/opt/libresbc/callng`       |
+| `/usr/local/etc/freeswitch/scripts/callng`         | `/opt/libresbc/callng`       |
+| `/usr/local/share/lua/5.2/callng`                  | `/opt/libresbc/callng`       |
+| `/etc/logrotate.d/libre`                           | `/opt/libresbc/liberator/system/logrotate.d/libre` |
+| `/etc/rsyslog.d/libre.conf`                        | `/opt/libresbc/liberator/system/rsyslog.d/libre.conf` |
+| `/etc/nginx`                                       | `/opt/libresbc/v1.0.0/third-party/nginx` (HARDCODED, hay que normalizar) |
+
+Importante: el symlink raiz `/opt/libresbc/callng -> /opt/libresbc/v<NEW>/callng` lo cambia `bin/deploy.sh`. Entonces todos los symlinks externos apuntan a `/opt/libresbc/callng` (no a `v<NEW>/callng` directamente) para que se actualicen automaticamente. **Excepcion**: el symlink de nginx en `/etc/` todavia apunta hardcoded a `v1.0.0`. Si en el futuro hay cambios en `third-party/nginx/` que necesiten reflejarse, normalizar tambien.
 
 ## Definicion de exito
 
