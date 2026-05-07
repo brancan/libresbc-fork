@@ -34,6 +34,34 @@ function get_nofailover_sip_codes(name)
 end
 
 ---------------------------------------------------------------------------------------------------------------------------------------------
+-- INBOUND CONNECTION DETECTION
+---------------------------------------------------------------------------------------------------------------------------------------------
+-- Look up the inbound connection (intcon) by matching the SIP profile and the source IP
+-- against the addresses configured in Redis under nameset:intcon:in.
+-- Returns the intcon name or nil if no match was found; callers should fall back to
+-- whatever default they used previously (typically InLeg:getVariable("user_name")).
+function determine_inbound_connection(network_ip, sipprofile)
+    local inbound_connections = rdbconn:smembers('nameset:intcon:in')
+    for _, intcon_id in ipairs(inbound_connections) do
+        local intcon_name = intcon_id:match("in:(.+)")
+        if intcon_name then
+            local intcon_data = rdbconn:hgetall(intcon_id)
+            if intcon_data and intcon_data.sipprofile == sipprofile then
+                local intcon_sipaddrs = fieldjsonify(intcon_data.sipaddrs)
+                if intcon_sipaddrs then
+                    for _, addr in ipairs(intcon_sipaddrs) do
+                        if addr.member == network_ip then
+                            return intcon_name
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+---------------------------------------------------------------------------------------------------------------------------------------------
 -- CONCURENT CALL
 ---------------------------------------------------------------------------------------------------------------------------------------------
 function concurentcallskeys(name, direction)

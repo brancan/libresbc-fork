@@ -29,7 +29,9 @@ local function main()
         local sipprofile = InLeg:getVariable("sofia_profile_name")
         local network_ip = InLeg:getVariable("sip_network_ip")
         NgVars.realm = InLeg:getVariable("domain_name")
-        NgVars.intconname = InLeg:getVariable("user_name")
+        -- Try to determine the inbound connection by SIP profile + source IP first;
+        -- fall back to the FreeSWITCH-provided user_name if no match in Redis.
+        NgVars.intconname = determine_inbound_connection(network_ip, sipprofile) or InLeg:getVariable("user_name")
         NgVars.hostto = InLeg:getVariable("sip_to_host")
         NgVars.hostfr = InLeg:getVariable("sip_from_host")
         NgVars.hostrq = InLeg:getVariable("sip_request_host")
@@ -95,7 +97,10 @@ local function main()
 
         -- routing
         local routingrules, navigator
+        -- Allow operators to set a default routing table via env var so that calls
+        -- that do not declare an explicit x-routing-plan still get routed.
         local routingname = InLeg:getVariable("x-routing-plan")
+                            or freeswitch.getGlobalVariable("LIBRE_DEFAULT_ROUTING_TABLE")
         navigator, NgVars.routes, routingrules = routing_query(routingname, NgVars)
 
         local routingrulestr = 'no.matching.route.found'
