@@ -36,28 +36,62 @@ end
 ---------------------------------------------------------------------------------------------------------------------------------------------
 -- INBOUND CONNECTION DETECTION
 ---------------------------------------------------------------------------------------------------------------------------------------------
+-- Convert an IPv4 string (a.b.c.d) to a 32-bit integer; returns nil if invalid.
+local function _ipv4_to_int(ip)
+    local a, b, c, d = ip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")
+    if not a then return nil end
+    a, b, c, d = tonumber(a), tonumber(b), tonumber(c), tonumber(d)
+    if not (a and b and c and d) then return nil end
+    if a > 255 or b > 255 or c > 255 or d > 255 then return nil end
+    return bit32.bor(bit32.lshift(a, 24), bit32.lshift(b, 16), bit32.lshift(c, 8), d)
+end
+
+-- Returns true if `ip` falls inside the IPv4 CIDR range `cidr` (e.g. "10.0.0.0/24").
+-- Bare IPs without prefix are treated as /32.
+local function _ipv4_in_cidr(ip, cidr)
+    local cidr_ip, cidr_prefix = cidr:match("^([%d%.]+)/(%d+)$")
+    if not cidr_ip then
+        cidr_ip = cidr
+        cidr_prefix = 32
+    end
+    local prefix = tonumber(cidr_prefix)
+    if not prefix or prefix < 0 or prefix > 32 then return false end
+    local ip_int = _ipv4_to_int(ip)
+    local cidr_int = _ipv4_to_int(cidr_ip)
+    if not ip_int or not cidr_int then return false end
+    if prefix == 0 then return true end
+    local mask = bit32.band(bit32.bnot(bit32.lshift(1, 32 - prefix) - 1), 0xFFFFFFFF)
+    return bit32.band(ip_int, mask) == bit32.band(cidr_int, mask)
+end
+
 -- Look up the inbound connection (intcon) by matching the SIP profile and the source IP
--- against the addresses configured in Redis under nameset:intcon:in.
+-- against the addresses (CIDRs) configured in Redis. Iterates intcon:in:* keys directly
+-- via SCAN because LibreSBC does not maintain a nameset:intcon:in index set.
 -- Returns the intcon name or nil if no match was found; callers should fall back to
 -- whatever default they used previously (typically InLeg:getVariable("user_name")).
 function determine_inbound_connection(network_ip, sipprofile)
-    local inbound_connections = rdbconn:smembers('nameset:intcon:in')
-    for _, intcon_id in ipairs(inbound_connections) do
-        local intcon_name = intcon_id:match("in:(.+)")
-        if intcon_name then
-            local intcon_data = rdbconn:hgetall(intcon_id)
-            if intcon_data and intcon_data.sipprofile == sipprofile then
-                local intcon_sipaddrs = fieldjsonify(intcon_data.sipaddrs)
-                if intcon_sipaddrs then
-                    for _, addr in ipairs(intcon_sipaddrs) do
-                        if addr.member == network_ip then
-                            return intcon_name
+    if not network_ip or not sipprofile then return nil end
+    local cursor = 0
+    repeat
+        local next_cursor, batch = unpack(rdbconn:scan(cursor, {match="intcon:in:*", count=100}))
+        cursor = tonumber(next_cursor) or 0
+        for _, intcon_id in ipairs(batch) do
+            local intcon_name = intcon_id:match("intcon:in:(.+)")
+            if intcon_name then
+                local intcon_data = rdbconn:hgetall(intcon_id)
+                if intcon_data and intcon_data.sipprofile == sipprofile then
+                    local intcon_sipaddrs = fieldjsonify(intcon_data.sipaddrs)
+                    if type(intcon_sipaddrs) == "table" then
+                        for _, cidr in ipairs(intcon_sipaddrs) do
+                            if _ipv4_in_cidr(network_ip, cidr) then
+                                return intcon_name
+                            end
                         end
                     end
                 end
             end
         end
-    end
+    until cursor == 0
     return nil
 end
 
