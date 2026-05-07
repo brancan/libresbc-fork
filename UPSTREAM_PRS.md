@@ -15,8 +15,8 @@ Tags asociados a los commits en `local/customizations`:
 | #     | Branch                          | Origen (commit)  | Area    | Estado    | Mergeado | Commit equivalente en `local/customizations` |
 |-------|---------------------------------|------------------|---------|-----------|----------|----------------------------------------------|
 | [#209](https://github.com/hnimminh/libresbc/pull/209) | `pr/libreapi-rtp-secure-media-enum`     | `470afba` | libreapi  | OPEN      | -        | (no aplica - solo upstream)                                     |
+| [#210](https://github.com/hnimminh/libresbc/pull/210) | `pr/webui-error-toasts`                 | `82a0f62` | webui     | OPEN      | -        | (no aplica - solo upstream)                                     |
 | ?     | `pr/cfgapi-directory-username-hash`     | `b5da7a2` | cfgapi    | DRAFT     | -        | `[UPSTREAM-PR:pendiente] fix(cfgapi): include username in hash` |
-| ?     | `pr/webui-error-toasts`                 | `82a0f62` | webui     | DRAFT     | -        | `[UPSTREAM-PR:pendiente] feat(webui): improved API error toasts` |
 | ?     | `pr/basemgr-cleanup-access-layer`       | `0666083` | basemgr   | A-VERIFICAR | -      | `[UPSTREAM-PR:pendiente] fix(basemgr): remove access-layer remnants` |
 
 (Los `?` se reemplazan por el numero real cuando se abren los PRs.)
