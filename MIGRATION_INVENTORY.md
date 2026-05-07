@@ -23,103 +23,115 @@ clasificado archivo por archivo para decidir qué se reaplica en
 - **LOCAL-ONLY**: específico del cliente o decisión nuestra; vive permanentemente
   en `local/customizations`.
 
-## Tabla maestra
+## Tabla maestra (decisiones finales)
 
-| Archivo | Δ lineas | Categoria | Decisión | Notas |
-|---|---|---|---|---|
-| **build/docker/** (4 files) | +251 | Generic | **UPSTREAM-PR** | docker-compose templates + libre.env genérico (sin IPs cliente). |
-| `build/preconfig/freeswitch/freeswitch.xml` | +215 | Verify | **A INSPECCIONAR** | Config FreeSWITCH base. Verificar si tiene NODEID/IPs del cliente. |
-| `build/preconfig/freeswitch/modules.conf` | +20 | Verify | **A INSPECCIONAR** | Lista de módulos. Probablemente genérico. |
-| `callng/callfunc.lua` | +94 | Mixed | **REWORK→PR** | Lógica inbound routing (parte de 9ae0250). Inspeccionar si parametrizable. |
-| `callng/configuration.lua` | +1 | Trivial | **A INSPECCIONAR** | Cambio de 1 línea. |
-| `callng/event.initiation.lua` | +17 | Generic | **UPSTREAM-PR** | Defensive json.encode (parte de 47412d5). Listo para PR. |
-| `callng/main.lua` | +10 | Local feature | **LOCAL-ONLY** o REWORK | Lee `LIBRE_DEFAULT_ROUTING_TABLE`. Decisión: ¿feature local permanente o promover como PR? |
-| `callng/sigfunc.lua` | +52 (NEW) | Kamailio stub | **DROP** | Funciones VACÍAS para no requerir kamailio. Sin valor sin kamailio. |
-| `callng/utilities.lua` | +26 | Generic | **UPSTREAM-PR** | `split()` defensive (parte de 47412d5). Listo para PR. |
-| `liberator/api.py` | +23 | Generic | **UPSTREAM-PR** | Captura body de PUT/POST a `/libreapi/sipprofile` para tracking/middleware. Útil para todos. |
-| `liberator/basemgr.py` (kamailio) | ~+150 | Kamailio | **DROP** | Re-add `kaminstance()` y access-layer machinery. |
-| `liberator/basemgr.py` (paths hardcoded) | +1 | Bug | **DROP** | `_NFT = ... '/opt/libresbc/liberator/nft'` rompe portabilidad. Upstream usa relativo. |
-| `liberator/cdr.py` | +10 | Verify | **A INSPECCIONAR** | Cambios en CDR processing. |
-| `liberator/cfgapi.py` (username hash) | +1 | Generic | **UPSTREAM-PR** | `hmget(..., 'username')` para directory hash. Esto es `b5da7a2`, próximo PR. |
-| `liberator/cfgapi.py` (path hardcoded) | +1 | Bug | **DROP** | `directory="/opt/libresbc/liberator/fscfg/xml"` rompe portabilidad. |
-| `liberator/cfgapi.py` (try/finally) | +~10 | Generic | **UPSTREAM-PR** | Refactor de control flow. Va junto a similares en libreapi.py. |
-| `liberator/cfgapi.py` (typo `ENGAGMENT`) | +1/-1 | Bug | **DROP** | Introduce typo. Si vamos a tocar, hay que CORREGIR el typo upstream también. |
-| `liberator/libreapi.py` (RtpSecureMediaEnum) | +7 | Generic | **EN PR #209** | Ya abierto. |
-| `liberator/libreapi.py` (refactor pydantic.v1) | ~+300 | Generic | **UPSTREAM-PR (split)** | Migración de validators imperativos a pydantic validators. Útil pero grande. |
-| `liberator/libreapi.py` (validators check_member, netalias) | ~+40 | Generic | **UPSTREAM-PR** | Pydantic validators reemplazando check imperativo. |
-| `liberator/libreapi.py` (try/finally consistente) | ~+40 | Generic | **UPSTREAM-PR** | Refactor de control flow. |
-| `liberator/libreapi.py` (NODEID env default) | +2 | Generic | **UPSTREAM-PR** | `os.getenv('NODEID', 'libresbc-node1')`. |
-| `liberator/libreapi.py` (DistributedGatewayModel.weight str→int validator) | +~5 | Generic | **UPSTREAM-PR** | Parte de 47412d5. Listo para PR. |
-| `liberator/libreapi.py` (resto +~700) | varios | Mixed | **REVISAR** | Probablemente DistributedGateway, Routing, etc. del cliente. Necesita split detallado. |
-| `liberator/main_cdr_only.py` (NEW) | +50 | Local feature | **A INSPECCIONAR** | Modo "solo CDR" sin tocar FS/Kamailio. ¿Se usa en runtime? Si sí: feature local. |
-| `liberator/nft/nftables.j2.conf` | +43 | Kamailio | **DROP** | Template de access-layers para kamailio. Sin valor sin kamailio. |
-| `liberator/requirements.txt` | -2 lines | Bug | **DROP** | Downgradea `requests` y `Jinja2`. Upstream tiene versiones más nuevas. |
-| `liberator/system/logrotate.d/libre` | +17 | Mixed | **DROP** | Diff diverge solo por sección de kamailio.log. Upstream ya cubre el resto. |
-| `liberator/system/rsyslog.d/libre.conf` | +6 | Verify | **A INSPECCIONAR** | Probablemente refleja pequeñas diferencias de path. |
-| `liberator/system/sbin/liberator.sh` (NEW, 3 lines) | +3 | Obsolete | **DROP** | Script con `cd /opt/liberator` (path antiguo). Upstream tiene systemd unit. |
-| `liberator/system/sbin/uvicorn.sh` (NEW, 9 lines) | +9 | Obsolete | **DROP** | Launcher dev de uvicorn. No se usa en producción. |
-| `liberator/utilities.py:redishash` | +21 | Generic | **UPSTREAM-PR** | Defensive coding cuando `json.dumps` falla. Listo para PR. |
-| `webui/assets/css/customize.css` | +34 | Generic | **EN PR #210** | Ya abierto. |
-| `webui/assets/js/site.js` (toasts ~140) | +140 | Generic | **EN PR #210** | Ya abierto. |
-| `webui/assets/js/site.js` (resto ~104) | +104 | Mixed | **A INSPECCIONAR** | Hay más cambios además de los toasts del PR #210. Splitear. |
-| `webui/index.html` | +1/-1 | Trivial bug | **DROP** | Hardcodea "© 2023". Upstream usa year dinámico. |
-| `webui/libresbc-webui` | +8.7MB binario | Binario | **DROP DEL REPO** | Binario compilado del webui de Go. NO va en repo de código. Se construye en deploy. |
-| `webui/test-error-handling.html` | +130 (NEW) | Test artifact | **DROP** | Página HTML de prueba para los toasts. No es producto. |
+| Archivo | Δ lineas | Decisión | Notas |
+|---|---|---|---|
+| `build/docker/Dockerfile.standalone` (NEW) | +74 | **UPSTREAM-PR** | Sin datos del cliente. |
+| `build/docker/docker-compose.dev.yml` (NEW) | +63 | **UPSTREAM-PR** | Composición dev sin IPs. |
+| `build/docker/docker-compose.standalone.yml` (NEW) | +29 | **UPSTREAM-PR** | Standalone sin IPs. |
+| `build/docker/docker-compose.yml` (NEW) | +60 | **UPSTREAM-PR** | Composición default sin IPs. |
+| `build/docker/libre.env` (NEW) | +25 | **UPSTREAM-PR** | Template genérico (`REDIS_HOST=127.0.0.1`, sin secrets reales). |
+| `build/preconfig/freeswitch/freeswitch.xml` (NEW) | +215 | **DROP** | Verificado en runtime: NO existe en `/opt/libresbc/v1.0.0/build/`. FreeSWITCH usa default + override dinámico de `sip_profiles/`. Archivo muerto. |
+| `build/preconfig/freeswitch/modules.conf` (NEW) | +20 | **DROP** | Idem `freeswitch.xml`: archivo muerto. |
+| `callng/callfunc.lua` | +94 | **REWORK→PR (split)** | Lógica inbound routing (parte de `9ae0250`). Hay que separar parte genérica del cliente. |
+| `callng/configuration.lua` | +1 | **UPSTREAM-PR** | Cambia `os.exit()` por `NODEID = "libresbc-node1"` cuando env var falta. Defensive. |
+| `callng/event.initiation.lua` | +17 | **UPSTREAM-PR** | Defensive `json.encode` (parte de `47412d5`). |
+| `callng/main.lua` | +10 | **LOCAL-ONLY** | Lee `LIBRE_DEFAULT_ROUTING_TABLE`. Único feature local real. |
+| `callng/sigfunc.lua` (NEW) | +52 | **DROP** | Funciones VACÍAS, stub para no requerir kamailio. Sin kamailio = sin sentido. |
+| `callng/utilities.lua` | +26 | **UPSTREAM-PR** | `split()` defensive (parte de `47412d5`). |
+| `liberator/api.py` | +23 | **UPSTREAM-PR** | Captura body de PUT/POST a `/libreapi/sipprofile` (middleware tracking útil). |
+| `liberator/basemgr.py` (kamailio) | ~+150 | **DROP** | Re-add `kaminstance()` y access-layer machinery. |
+| `liberator/basemgr.py` (path hardcoded) | +1 | **DROP** | `_NFT = ... '/opt/libresbc/liberator/nft'` rompe portabilidad. |
+| `liberator/cdr.py` | +10 | **UPSTREAM-PR** | `try/finally: return result` defensive. |
+| `liberator/cfgapi.py` (username hash) | +1 | **UPSTREAM-PR** | `hmget(..., 'username')`. Núcleo de `b5da7a2`. |
+| `liberator/cfgapi.py` (path hardcoded) | +1 | **DROP** | `directory="/opt/libresbc/liberator/fscfg/xml"`. |
+| `liberator/cfgapi.py` (try/finally) | +~10 | **UPSTREAM-PR** | Combinable con cdr.py + libreapi.py. |
+| `liberator/cfgapi.py` (typo `ENGAGMENT`) | +1/-1 | **DROP** | Introduce typo. |
+| `liberator/libreapi.py` (RtpSecureMediaEnum) | +7 | **EN PR [#209](https://github.com/hnimminh/libresbc/pull/209)** | Abierto. |
+| `liberator/libreapi.py` (DistributedGatewayModel.weight validator) | +~5 | **UPSTREAM-PR** | Parte de `47412d5`. |
+| `liberator/libreapi.py` (validators check_member, netalias) | ~+40 | **UPSTREAM-PR (combinable)** | Pydantic validators. |
+| `liberator/libreapi.py` (try/finally consistente) | ~+40 | **UPSTREAM-PR (combinable)** | Refactor control flow. |
+| `liberator/libreapi.py` (NODEID env default) | +2 | **UPSTREAM-PR** | `os.getenv('NODEID', 'libresbc-node1')`. Compañero de `configuration.lua`. |
+| `liberator/libreapi.py` (DomainPolicy + AccessService + AntiFlooding + AuthFailure + AttackAvoid + AccessDirectory) | ~+700 | **DROP** | Endpoints `/access_directory_user`, `/access_service`, `/access_domain_policy`. Es la API del access-layer abandonado. Sin kamailio = sin uso. |
+| `liberator/main_cdr_only.py` (NEW) | +50 | **DROP** | Servicio `liberator-cdr.service` está `disabled + inactive` (verificado en runtime). Feature dormida. |
+| `liberator/nft/nftables.j2.conf` | +43 | **DROP** | Template `accesslayers` para kamailio. |
+| `liberator/requirements.txt` | -2 lines | **DROP** | Downgrade de deps (peor que upstream). |
+| `liberator/system/logrotate.d/libre` | +17 | **DROP** | Diferencia es solo sección kamailio.log. |
+| `liberator/system/rsyslog.d/libre.conf` | +6 | **DROP** | Mismo: agrega `kamailio.log` rsyslog rules. |
+| `liberator/system/sbin/liberator.sh` (NEW, 3 lines) | +3 | **DROP** | Script con `cd /opt/liberator` (path antiguo). Upstream tiene systemd unit. |
+| `liberator/system/sbin/uvicorn.sh` (NEW, 9 lines) | +9 | **DROP** | Launcher dev de uvicorn. |
+| `liberator/utilities.py:redishash` | +21 | **UPSTREAM-PR** | Defensive coding cuando `json.dumps` falla. |
+| `webui/assets/css/customize.css` | +34 | **EN PR [#210](https://github.com/hnimminh/libresbc/pull/210)** | Abierto. |
+| `webui/assets/js/site.js` (toasts ~140) | +140 | **EN PR [#210](https://github.com/hnimminh/libresbc/pull/210)** | Abierto. |
+| `webui/assets/js/site.js` (`Array.isArray()` defensive ~30) | +30 | **UPSTREAM-PR (separado)** | Defensive guards antes de `forEach`. |
+| `webui/assets/js/site.js` (otros ~74) | +74 | **A REVISAR** | Mix de cambios menores. Splitear o DROP. |
+| `webui/index.html` | +1/-1 | **DROP** | Hardcodea "© 2023". |
+| `webui/libresbc-webui` (NEW, 8.7MB) | +8388608 (binario) | **DROP DEL REPO** | Binario compilado del webui de Go. NO va en repo de código. |
+| `webui/test-error-handling.html` (NEW) | +130 | **DROP** | Página HTML de prueba. |
 
-## Resumen de decisiones
+## Resumen de decisiones (CERRADO tras inspección runtime)
 
-| Categoría | # archivos | Acción |
+| Categoría | # | Items |
 |---|---|---|
-| **DROP** definitivo | ~12 | Quedan en archive, no se reaplican. Incluye kamailio, paths hardcoded, downgrades, binarios, scripts dev, copyright. |
-| **UPSTREAM-PR** ya abiertos | 2 | #209 (RtpSecureMediaEnum), #210 (webui error toasts). |
-| **UPSTREAM-PR** próximos a abrir | ~7 | `b5da7a2` (cfgapi-username-hash), 3 splits de `47412d5` (event.initiation, utilities split, weight validator), `api.py` body capture, `utilities.py:redishash`, `cfgapi.py` try/finally. |
-| **UPSTREAM-PR (mientras tanto LOCAL-ONLY)** | ~3 | Refactors grandes de `libreapi.py` (pydantic validators) — abrir PR pero mantener local porque no es trivial reescribir. |
-| **LOCAL-ONLY** real | 1-2 | `LIBRE_DEFAULT_ROUTING_TABLE` (callng/main.lua). Posiblemente `main_cdr_only.py` si está en uso. |
-| **A INSPECCIONAR** antes de decidir | ~5 | `freeswitch.xml`, `modules.conf`, `cdr.py`, `rsyslog.d/libre.conf`, resto de `site.js`, resto de `libreapi.py`. |
+| **DROP** definitivo | 14 | Kamailio (kami.lua, sigfunc.lua, kamcfg/, nft accesslayers, rsyslog kamailio, basemgr kaminstance, libreapi access_*, build/preconfig/freeswitch/, main_cdr_only.py), paths hardcoded (basemgr, cfgapi), bugs (typo ENGAGMENT, deps downgrade, copyright 2023), binarios (webui-go, test-error-handling.html, scripts liberator.sh/uvicorn.sh), logrotate/rsyslog kamailio. |
+| **UPSTREAM-PR** abiertos | 2 | [#209](https://github.com/hnimminh/libresbc/pull/209), [#210](https://github.com/hnimminh/libresbc/pull/210). |
+| **UPSTREAM-PR** a abrir | 9-10 | `b5da7a2` (cfgapi-username), 3 splits de `47412d5` (event.initiation, utilities split, weight validator), `api.py` body capture, `utilities.py:redishash`, `configuration.lua` NODEID default + libreapi NODEID default (combinable), `cdr.py + cfgapi + libreapi try/finally` (combinable), `site.js` Array.isArray defensive, `libreapi.py` pydantic validators (`check_member`, `netalias_agreement`), `build/docker/*` templates. |
+| **LOCAL-ONLY** real | 1 | `LIBRE_DEFAULT_ROUTING_TABLE` (`callng/main.lua` + posiblemente `libreapi.py` para exponer la config). |
+| **REWORK→PR (split detallado)** | 1 | `callng/callfunc.lua` (+94 lineas). Lógica inbound routing — separar parte genérica (PR) de parte específica del cliente (LOCAL-ONLY). |
+| **A revisar caso a caso** | 1 | `webui/assets/js/site.js` resto (~74 líneas no clasificadas). |
 
-## Plan de re-aplicación
+## Plan de re-aplicación (versión final)
 
-### Fase 1 — DROP confirmados (no requiere acción)
+### Fase A — DROP confirmados (sin acción)
 
-Todo el código kamailio, paths hardcoded, downgrades de deps, copyright, binarios y scripts dev quedan en el archive y no se tocan.
+14 archivos quedan en el archive (`archive/feature-improved-error-handling-202605`) y no se reaplican. Si el cliente quiere conservar el binario `webui/libresbc-webui` o algún script muerto, van a `/var/lib/libresbc-ops/`.
 
-### Fase 2 — Re-aplicar **LOCAL-ONLY** mínimos (necesarios para mantener funcionalidad runtime)
+### Fase B — Reaplicar el único LOCAL-ONLY real
 
-Crear commits limpios sobre `local/customizations`:
+Un commit en `local/customizations`:
 
 1. `[LOCAL-ONLY] feat(callng): support LIBRE_DEFAULT_ROUTING_TABLE env var`
-2. (condicional) `[LOCAL-ONLY] feat(liberator): add main_cdr_only mode` si se usa.
+   - Reaplica el cambio chico de `callng/main.lua` (+10 líneas).
+   - Si hay un cambio compañero en `libreapi.py` para exponer la config, va junto.
 
-### Fase 3 — Abrir PRs upstream restantes (no requiere reaplicar localmente)
+### Fase C — Abrir PRs upstream restantes (en paralelo a Fase B)
 
-Por cada uno: `bin/open-pr.sh ...`. Cuando mergee, viene gratis vía `git fetch upstream + rebase`.
+Cada uno con `bin/open-pr.sh`. Por orden de "facilidad de merge":
 
-3. `b5da7a2` → PR `pr/cfgapi-directory-username-hash`
-4. `47412d5` split (a) → PR `pr/callng-event-initiation-defensive-json`
-5. `47412d5` split (b) → PR `pr/callng-utilities-split-defensive`
-6. `47412d5` split (c) → PR `pr/libreapi-weight-string-validator`
-7. `api.py` body capture → PR `pr/libreapi-sipprofile-body-capture`
-8. `utilities.py:redishash` defensive → PR `pr/utilities-redishash-defensive`
-9. `cfgapi.py` try/finally + libreapi.py try/finally → PR (combinado)
+| # | PR | Origen | Riesgo |
+|---|---|---|---|
+| 3 | `pr/cfgapi-directory-username-hash` | `b5da7a2` (parcial) | Bajo. 1 línea cambio. |
+| 4 | `pr/callng-event-initiation-defensive-json` | `47412d5` parte | Bajo. Defensive. |
+| 5 | `pr/callng-utilities-split-defensive` | `47412d5` parte | Bajo. Defensive. |
+| 6 | `pr/libreapi-weight-string-validator` | `47412d5` parte | Bajo. Pydantic validator. |
+| 7 | `pr/api-sipprofile-body-capture` | `api.py` cambio | Medio. Middleware general. |
+| 8 | `pr/utilities-redishash-defensive` | `utilities.py:redishash` | Bajo. Defensive. |
+| 9 | `pr/configuration-nodeid-default` | `callng/configuration.lua` + `libreapi.py:NODEID` (combinable) | Bajo. Defensive. |
+| 10 | `pr/cdr-cfgapi-libreapi-try-finally` | combinado | Medio. Refactor consistente. |
+| 11 | `pr/webui-array-isarray-defensive` | `site.js` parte | Bajo. Guards. |
+| 12 | `pr/libreapi-pydantic-validators` | `libreapi.py` validators | Medio-alto. Refactor mayor. |
+| 13 | `pr/build-docker-templates` | `build/docker/*` (5 archivos) | Medio. ¿Ya tienen template propio? Verificar. |
 
-### Fase 4 — Refactors grandes (mientras tanto LOCAL-ONLY)
+### Fase D — Casos especiales
 
-10. `libreapi.py` pydantic validators (`check_member`, `netalias_agreement`, etc.) — abrir PR pero reaplicar como `[UPSTREAM-PR:#NNN]` en local porque su impacto en API es grande.
+- `callng/callfunc.lua` (+94): split entre PR (parte genérica de inbound routing) y commit `[LOCAL-ONLY]` (parte que dependa de tabla del cliente).
+- `webui/assets/js/site.js` (+74 sin clasificar): inspeccionar trozo a trozo.
 
-### Fase 5 — Resto a inspeccionar caso a caso
+## Estado al cierre del proceso (objetivo realista)
 
-11. `freeswitch.xml`, `modules.conf`, `cdr.py`, `rsyslog.d/libre.conf`, resto de `site.js`, resto de `libreapi.py`.
+`local/customizations` debería terminar con **5-6 commits permanentes**:
 
-## Estado al cierre del proceso (objetivo)
+1. `[LOCAL-ONLY] add upgrade tooling, runbook and audit docs` ✅
+2. `[LOCAL-ONLY] open-pr.sh: detect fork owner, idempotent re-runs, auto-create PR` ✅
+3. `[LOCAL-ONLY] track PR #210 (webui error toasts)` ✅
+4. `[LOCAL-ONLY] add MIGRATION_INVENTORY.md` ✅
+5. `[LOCAL-ONLY] feat(callng): LIBRE_DEFAULT_ROUTING_TABLE` ⏳
+6. (eventual) `[LOCAL-ONLY] split de callng/callfunc.lua para parte client-specific` ⏳
 
-`local/customizations` debería terminar con **2-4 commits**:
+Cualquier commit `[UPSTREAM-PR:#NNN]` para refactors grandes se descartará al
+rebasar contra upstream cuando el PR correspondiente mergee.
 
-- 1 commit `[LOCAL-ONLY] add upgrade tooling, runbook and audit docs` (ya existe)
-- 1 commit `[LOCAL-ONLY] open-pr.sh: bug fixes` (ya existe)
-- 1 commit `[LOCAL-ONLY] track PRs en UPSTREAM_PRS.md` (ya existe)
-- 0-1 commit `[LOCAL-ONLY] feat(callng): LIBRE_DEFAULT_ROUTING_TABLE` (TODO)
-- 0-1 commit `[LOCAL-ONLY] feat: main_cdr_only mode` (condicional)
-
-Los commits `[UPSTREAM-PR:#NNN]` para refactors grandes se descartan al rebasar contra upstream cuando los PRs mergeen.
-
-**Si todo va bien, en 6-12 meses la rama queda con 1-3 commits permanentes.**
+**Si todo va bien, en 6-12 meses la rama queda con 4-6 commits permanentes**, todos
+de tooling/docs/configuración explícitamente local — la deuda técnica quedaría
+casi en cero.
