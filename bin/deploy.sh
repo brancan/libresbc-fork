@@ -158,6 +158,23 @@ for s in liberator callng venv libre.env; do
   run "ln -sfn '$NEW_DIR/$s' '$OPT_DIR/$s'"
 done
 
+# Normalizar symlinks externos que FreeSWITCH usa para cargar callng.
+# Apuntan al symlink raiz $OPT_DIR/callng (no al deploy versionado), de
+# modo que un proximo deploy.sh los actualice automaticamente.
+FS_CALLNG_LINKS=(
+  /usr/local/share/freeswitch/scripts/callng
+  /usr/local/etc/freeswitch/scripts/callng
+)
+for fslink in "${FS_CALLNG_LINKS[@]}"; do
+  if [ -L "$fslink" ] || [ ! -e "$fslink" ]; then
+    if [ "$(readlink "$fslink" 2>/dev/null || true)" != "$OPT_DIR/callng" ]; then
+      run "ln -sfn '$OPT_DIR/callng' '$fslink'"
+    fi
+  else
+    log "[WARN] $fslink existe pero NO es un symlink; saltado para no romper nada."
+  fi
+done
+
 # ---------------------------------------------------------------------------
 # 5. Restart y verificacion
 # ---------------------------------------------------------------------------
