@@ -99,19 +99,36 @@ Un commit en `local/customizations`:
 
 Cada uno con `bin/open-pr.sh`. Por orden de "facilidad de merge":
 
-| # | PR | Origen | Riesgo |
-|---|---|---|---|
-| 3 | `pr/cfgapi-directory-username-hash` | `b5da7a2` (parcial) | Bajo. 1 línea cambio. |
-| 4 | `pr/callng-event-initiation-defensive-json` | `47412d5` parte | Bajo. Defensive. |
-| 5 | `pr/callng-utilities-split-defensive` | `47412d5` parte | Bajo. Defensive. |
-| 6 | `pr/libreapi-weight-string-validator` | `47412d5` parte | Bajo. Pydantic validator. |
-| 7 | `pr/api-sipprofile-body-capture` | `api.py` cambio | Medio. Middleware general. |
-| 8 | `pr/utilities-redishash-defensive` | `utilities.py:redishash` | Bajo. Defensive. |
-| 9 | `pr/configuration-nodeid-default` | `callng/configuration.lua` + `libreapi.py:NODEID` (combinable) | Bajo. Defensive. |
-| 10 | `pr/cdr-cfgapi-libreapi-try-finally` | combinado | Medio. Refactor consistente. |
-| 11 | `pr/webui-array-isarray-defensive` | `site.js` parte | Bajo. Guards. |
-| 12 | `pr/libreapi-pydantic-validators` | `libreapi.py` validators | Medio-alto. Refactor mayor. |
-| 13 | `pr/build-docker-templates` | `build/docker/*` (5 archivos) | Medio. ¿Ya tienen template propio? Verificar. |
+> **Revisado 2026-05-07** contra `upstream/master` actual y PRs abiertos en hnimminh/libresbc.
+> Contexto: PR #179 (lfoxdev, 2024-11-17) lleva 18 meses abierto sin merge — el ritmo de review de upstream es lento. Tener expectativas realistas.
+
+| # | PR | Origen | Estado | Notas |
+|---|---|---|---|---|
+| 3 | `pr/cfgapi-directory-username-hash` | `b5da7a2` (parcial) | **PENDIENTE** | `'username'` no está en `hmget` de upstream. Vale abrirlo. |
+| 4 | `pr/callng-event-initiation-defensive-json` | `47412d5` parte | **A VERIFICAR** | `pcall` ya existe en upstream para json.encode. Revisar si el cambio exacto ya fue absorbido. |
+| 5 | `pr/callng-utilities-split-defensive` | `47412d5` parte | **PENDIENTE** | `split()` existe pero sin el wrapper defensivo del archive. |
+| 6 | `pr/libreapi-weight-string-validator` | `47412d5` parte | **PENDIENTE** | `weight: int` existe pero sin validator de coerción desde string. |
+| 7 | `pr/api-sipprofile-body-capture` | `api.py` cambio | **ABSORBIDO** ✅ | El middleware ya captura body de todas las requests en upstream (líneas 38-57). No abrir. |
+| 8 | `pr/utilities-redishash-defensive` | `utilities.py:redishash` | **PENDIENTE** | `json.dumps` sin try/except en `redishash`. Vale abrirlo. |
+| 9 | `pr/configuration-nodeid-default` | `callng/configuration.lua` + `libreapi.py:NODEID` | **DROP** ❌ | Upstream hace `os.exit()` intencionalmente (fail-fast en misconfiguration). Defaultear a "libresbc-node1" enmascara errores en multi-nodo. No vale la pena. |
+| 10 | `pr/cdr-cfgapi-libreapi-try-finally` | combinado | **ABSORBIDO** ✅ | Patrón try/finally ya presente en cdr.py en upstream. No abrir. |
+| 11 | `pr/webui-array-isarray-defensive` | `site.js` parte | **PENDIENTE** | Sin guards en upstream. Ojo: PR #179 (lfoxdev) toca el mismo archivo (+7/-1) — coordinar o esperar resolución de ese PR. |
+| 12 | `pr/libreapi-pydantic-validators` | `libreapi.py` validators | **ABSORBIDO** ✅ | `check_member` (línea 99) y `netalias_agreement` (línea 183) ya están en upstream. No abrir. |
+| 13 | `pr/build-docker-templates` | `build/docker/*` (5 archivos) | **BLOQUEADO** ⏸ | PR #179 (lfoxdev) toca `docker-compose.yml` y `libre.env`. Esperar resolución de ese PR antes de avanzar. |
+
+### PRs abiertos en hnimminh/libresbc (2026-05-07)
+
+| # | Autor | Título | Abierto hace | Relevancia para nosotros |
+|---|---|---|---|---|
+| [#179](https://github.com/hnimminh/libresbc/pull/179) | lfoxdev | Fix bugs Redis/Docker/Kamailio, WebUI autostart | 18 meses | Toca `docker-compose.yml`, `libre.env`, `libreapi.py`, `site.js` — bloquea PR13 y PR11 |
+| [#209](https://github.com/hnimminh/libresbc/pull/209) | brancan | feat(libapi): RtpSecureMediaEnum | hoy | Nuestro |
+| [#210](https://github.com/hnimminh/libresbc/pull/210) | brancan | feat(webui): error toasts | hoy | Nuestro |
+
+**Resumen ejecutivo Fase C (actualizado)**:
+- Absorbidos por upstream: PR7, PR10, PR12 → no abrir.
+- Drop por decisión de diseño: PR9 → no abrir.
+- Bloqueados por PR #179: PR11, PR13 → esperar.
+- Pendientes reales para cuando se aprueben #209/#210: PR3, PR5, PR6, PR8 (los más simples y de bajo riesgo).
 
 ### Fase D — Casos especiales
 
