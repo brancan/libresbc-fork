@@ -16,8 +16,9 @@ Tags asociados a los commits en `local/customizations`:
 |-------|---------------------------------|------------------|---------|-----------|----------|----------------------------------------------|
 | [#209](https://github.com/hnimminh/libresbc/pull/209) | `pr/libreapi-rtp-secure-media-enum`            | `470afba` | libreapi  | OPEN        | -        | (no aplica - solo upstream)                                              |
 | [#210](https://github.com/hnimminh/libresbc/pull/210) | `pr/webui-error-toasts`                        | `82a0f62` | webui     | OPEN        | -        | (no aplica - solo upstream)                                              |
-| [#211](https://github.com/hnimminh/libresbc/pull/211) | `pr/libreapi-routing-table-optional-secondary` | issue #197 | libreapi | OPEN        | -        | Fix aplicado también en `local/customizations`. Dos validators corregidos. |
-| ?     | `pr/cfgapi-directory-username-hash`            | `b5da7a2`  | cfgapi    | DRAFT       | -        | `[UPSTREAM-PR:pendiente] fix(cfgapi): include username in hash`          |
+| [#211](https://github.com/hnimminh/libresbc/pull/211) | `pr/libreapi-routing-table-optional-secondary` | issue #197  | libreapi | OPEN  | - | Fix aplicado también en `local/customizations`. Dos validators corregidos. |
+| [#212](https://github.com/hnimminh/libresbc/pull/212) | `pr/basemgr-freeswitch-backgrounding-newline`  | PR #179     | basemgr  | OPEN  | - | Fix de 1 línea. Fix aplicado en `local/customizations`. |
+| ?     | `pr/cfgapi-directory-username-hash`            | `b5da7a2`   | cfgapi   | DRAFT | - | `[UPSTREAM-PR:pendiente] fix(cfgapi): include username in hash`          |
 | ?     | `pr/basemgr-cleanup-access-layer`              | `0666083`  | basemgr   | A-VERIFICAR | -        | `[UPSTREAM-PR:pendiente] fix(basemgr): remove access-layer remnants`     |
 
 (Los `?` se reemplazan por el numero real cuando se abren los PRs.)
