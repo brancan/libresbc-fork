@@ -12,14 +12,24 @@ Tags asociados a los commits en `local/customizations`:
 
 ## Tabla de PRs
 
-| #   | Branch                          | Origen (commit)  | Area    | Estado    | Mergeado | Commit equivalente en `local/customizations` |
-|-----|---------------------------------|------------------|---------|-----------|----------|----------------------------------------------|
-| ?   | `pr/libreapi-rtp-secure-media-enum`     | `470afba` | libreapi  | DRAFT     | -        | `[UPSTREAM-PR:pendiente] feat(libapi): add RtpSecureMediaEnum` |
-| ?   | `pr/cfgapi-directory-username-hash`     | `b5da7a2` | cfgapi    | DRAFT     | -        | `[UPSTREAM-PR:pendiente] fix(cfgapi): include username in hash` |
-| ?   | `pr/webui-error-toasts`                 | `82a0f62` | webui     | DRAFT     | -        | `[UPSTREAM-PR:pendiente] feat(webui): improved API error toasts` |
-| ?   | `pr/basemgr-cleanup-access-layer`       | `0666083` | basemgr   | A-VERIFICAR | -      | `[UPSTREAM-PR:pendiente] fix(basemgr): remove access-layer remnants` |
+| #     | Branch                          | Origen (commit)  | Area    | Estado    | Mergeado | Commit equivalente en `local/customizations` |
+|-------|---------------------------------|------------------|---------|-----------|----------|----------------------------------------------|
+| [#209](https://github.com/hnimminh/libresbc/pull/209) | `pr/libreapi-rtp-secure-media-enum`     | `470afba` | libreapi  | OPEN      | -        | (no aplica - solo upstream)                                     |
+| ?     | `pr/cfgapi-directory-username-hash`     | `b5da7a2` | cfgapi    | DRAFT     | -        | `[UPSTREAM-PR:pendiente] fix(cfgapi): include username in hash` |
+| ?     | `pr/webui-error-toasts`                 | `82a0f62` | webui     | DRAFT     | -        | `[UPSTREAM-PR:pendiente] feat(webui): improved API error toasts` |
+| ?     | `pr/basemgr-cleanup-access-layer`       | `0666083` | basemgr   | A-VERIFICAR | -      | `[UPSTREAM-PR:pendiente] fix(basemgr): remove access-layer remnants` |
 
 (Los `?` se reemplazan por el numero real cuando se abren los PRs.)
+
+### Nota sobre PR #209
+
+Como `local/customizations` parte de `upstream/master` directamente y el PR
+de `RtpSecureMediaEnum` se abrio antes de re-aplicar nada de la rama vieja,
+no hay un commit equivalente en `local/customizations` para esta entrada.
+Cuando `#209` mergee, el cambio ya estara en upstream y se incorporara
+automaticamente en el proximo `git fetch upstream` + rebase de
+`local/customizations`. Si el PR es rechazado, hay que decidir entre
+re-applicarlo como `[LOCAL-ONLY]` o descartarlo.
 
 ---
 
