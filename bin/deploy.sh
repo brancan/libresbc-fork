@@ -8,7 +8,14 @@
 # Rollback = repuntar los symlinks a la version previa y reiniciar.
 #
 # Uso:
-#   sudo ./bin/deploy.sh [--dry-run] [--rollback]
+#   sudo ./bin/deploy.sh [--dry-run] [--stage-only] [--rollback]
+#
+# Modos:
+#   --dry-run     No ejecuta nada, solo printea los comandos.
+#   --stage-only  Ejecuta copia + build venv + smoke tests, pero NO switchea
+#                 symlinks ni reinicia el servicio. Util para validar antes
+#                 de promover. El directorio queda en /opt/libresbc/v_staging_*.
+#   --rollback    Vuelve atras al ultimo deploy.
 #
 # Variables:
 #   REPO_DIR  /home/cpe/libresbc
@@ -19,13 +26,15 @@ set -euo pipefail
 REPO_DIR="${REPO_DIR:-/home/cpe/libresbc}"
 OPT_DIR="${OPT_DIR:-/opt/libresbc}"
 DRY_RUN=0
+STAGE_ONLY=0
 ROLLBACK=0
 
 for arg in "$@"; do
   case "$arg" in
-    --dry-run)  DRY_RUN=1 ;;
-    --rollback) ROLLBACK=1 ;;
-    -h|--help)  sed -n '1,25p' "$0"; exit 0 ;;
+    --dry-run)    DRY_RUN=1 ;;
+    --stage-only) STAGE_ONLY=1 ;;
+    --rollback)   ROLLBACK=1 ;;
+    -h|--help)    sed -n '1,30p' "$0"; exit 0 ;;
     *) echo "[ERROR] Argumento desconocido: $arg" >&2; exit 2 ;;
   esac
 done
@@ -62,7 +71,11 @@ fi
 # ---------------------------------------------------------------------------
 GIT_DESC=$(git describe --tags --always --dirty 2>/dev/null || git rev-parse --short HEAD)
 TS=$(date +%Y%m%d-%H%M%S)
-NEW_VER="v${GIT_DESC}-${TS}"
+if [ "$STAGE_ONLY" -eq 1 ]; then
+  NEW_VER="v_staging_${GIT_DESC}-${TS}"
+else
+  NEW_VER="v${GIT_DESC}-${TS}"
+fi
 NEW_DIR="$OPT_DIR/$NEW_VER"
 log "Nueva version: $NEW_VER -> $NEW_DIR"
 
@@ -100,13 +113,41 @@ run "'$NEW_DIR/venv/bin/pip' install --upgrade pip wheel"
 run "'$NEW_DIR/venv/bin/pip' install -r '$NEW_DIR/liberator/requirements.txt'"
 
 # ---------------------------------------------------------------------------
-# 3. Smoke test sintaxis
+# 3. Smoke tests sintaxis
 # ---------------------------------------------------------------------------
-log "=== 3. Smoke test sintaxis Python ==="
+log "=== 3a. Smoke test sintaxis Python ==="
 run "'$NEW_DIR/venv/bin/python3' -m compileall -q '$NEW_DIR/liberator/'"
 
 # Smoke test que liberator/main.py se importa sin error fatal (sin arrancarlo)
 run "'$NEW_DIR/venv/bin/python3' -c 'import sys; sys.path.insert(0, \"$NEW_DIR/liberator\"); import importlib.util; spec=importlib.util.spec_from_file_location(\"main\", \"$NEW_DIR/liberator/main.py\"); print(\"main.py importable:\", spec is not None)'" || fatal "main.py no importable"
+
+log "=== 3b. Smoke test sintaxis Lua (callng/) ==="
+if command -v luac >/dev/null 2>&1; then
+  for luafile in "$NEW_DIR"/callng/*.lua; do
+    [ -f "$luafile" ] || continue
+    run "luac -p '$luafile'" || fatal "Sintaxis Lua invalida en $luafile"
+  done
+else
+  log "[WARN] luac no instalado; saltando smoke test de Lua"
+fi
+
+# ---------------------------------------------------------------------------
+# Si STAGE_ONLY: parar aca, no tocar el runtime
+# ---------------------------------------------------------------------------
+if [ "$STAGE_ONLY" -eq 1 ]; then
+  log "=== STAGE-ONLY: deploy NO promovido. Directorio listo en $NEW_DIR ==="
+  log "Para promoverlo a runtime real, correr:"
+  log "  sudo $0          # nuevo deploy completo desde repo"
+  log "  # o manualmente:"
+  log "  for s in liberator callng venv libre.env; do"
+  log "    sudo ln -sfn '$NEW_DIR/\$s' '$OPT_DIR/\$s'"
+  log "  done"
+  log "  sudo systemctl restart liberator"
+  log ""
+  log "Para limpiar este staging cuando ya no lo uses:"
+  log "  sudo rm -rf '$NEW_DIR'"
+  exit 0
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Switch atomico de symlinks
