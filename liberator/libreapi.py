@@ -10,7 +10,9 @@
 import traceback
 import re
 import json
+import time
 import redis
+import redfs
 import validators
 from pydantic import model_validator, StringConstraints, BaseModel, Field
 from pydantic.json_schema import SkipJsonSchema
@@ -91,6 +93,170 @@ def predefine():
         'members': rdbconn.smembers('cluster:members'),
         'codecs': SWCODECS,
     }
+
+
+@librerouter.get("/libreapi/health", status_code=200)
+def health(response: Response):
+    requestid = get_request_uuid()
+    try:
+        result = {}
+
+        # redis
+        try:
+            t0 = time.monotonic()
+            rdbconn.ping()
+            latency_ms = round((time.monotonic() - t0) * 1000, 2)
+            info = rdbconn.info('all')
+            result['redis'] = {
+                'status': 'up',
+                'latency_ms': latency_ms,
+                'version': info.get('redis_version'),
+                'uptime_s': info.get('uptime_in_seconds'),
+                'used_memory_human': info.get('used_memory_human'),
+                'connected_clients': info.get('connected_clients'),
+            }
+        except Exception as e:
+            result['redis'] = {'status': 'down', 'error': str(e)}
+
+        # liberator
+        result['liberator'] = {'status': 'up', 'version': _SWVERSION}
+
+        # freeswitch per cluster node
+        fs_nodes = []
+        try:
+            members = rdbconn.smembers('cluster:members')
+            for nodeid in members:
+                _socket = rdbconn.hget('DISCOVERY', nodeid)
+                if not _socket:
+                    fs_nodes.append({'nodeid': nodeid, 'status': 'unknown', 'error': 'no discovery data'})
+                    continue
+                socket_data = json.loads(_socket)
+                try:
+                    fs = redfs.InboundESL(
+                        host=socket_data.get('ipaddr'),
+                        port=socket_data.get('port'),
+                        password=socket_data.get('password'),
+                        timeout=3
+                    )
+                    fs.connect()
+                    if fs.connected:
+                        resp = fs.send('api status')
+                        first_line = (resp.data.split('\n')[0] if resp and resp.data else '').strip()
+                        fs_nodes.append({'nodeid': nodeid, 'status': 'up', 'detail': first_line})
+                    else:
+                        fs_nodes.append({'nodeid': nodeid, 'status': 'down', 'error': 'connection failed'})
+                except Exception as e:
+                    fs_nodes.append({'nodeid': nodeid, 'status': 'down', 'error': str(e)})
+        except Exception as e:
+            logger.error(f'module=liberator, space=libreapi, action=health:freeswitch, requestid={requestid}, exception={e}')
+        result['freeswitch'] = fs_nodes
+
+        # active calls (sum SCARD on all realtime:concurentcalls keys)
+        try:
+            inbound = outbound = 0
+            cursor = 0
+            while True:
+                cursor, keys = rdbconn.scan(cursor, 'realtime:concurentcalls:inbound:*', 100)
+                for k in keys:
+                    inbound += rdbconn.scard(k)
+                if cursor == 0:
+                    break
+            cursor = 0
+            while True:
+                cursor, keys = rdbconn.scan(cursor, 'realtime:concurentcalls:outbound:*', 100)
+                for k in keys:
+                    outbound += rdbconn.scard(k)
+                if cursor == 0:
+                    break
+            result['active_calls'] = {'inbound': inbound, 'outbound': outbound, 'total': inbound + outbound}
+        except Exception as e:
+            result['active_calls'] = {'error': str(e)}
+
+        response.status_code = 200
+    except Exception as e:
+        response.status_code = 500
+        logger.error(f'module=liberator, space=libreapi, action=health, requestid={requestid}, exception={e}, traceback={traceback.format_exc()}')
+        result = None
+    return result
+
+
+@librerouter.get("/libreapi/interconnection/status", status_code=200)
+def interconnection_status(response: Response):
+    requestid = get_request_uuid()
+    try:
+        result = {'inbound': {}, 'outbound': {}}
+
+        # active calls per intcon from realtime Redis keys
+        for direction in ('inbound', 'outbound'):
+            cursor = 0
+            while True:
+                cursor, keys = rdbconn.scan(cursor, f'realtime:concurentcalls:{direction}:*', 100)
+                for key in keys:
+                    parts = key.split(':')
+                    # format: realtime:concurentcalls:{direction}:{intcon}:{nodeid}
+                    if len(parts) >= 5:
+                        intcon = parts[3]
+                        if intcon not in result[direction]:
+                            result[direction][intcon] = {'active_calls': 0}
+                        result[direction][intcon]['active_calls'] += rdbconn.scard(key)
+                if cursor == 0:
+                    break
+
+        # gateway registration status via ESL (outbound only)
+        cursor = 0
+        outbound_intcons = set()
+        while True:
+            cursor, keys = rdbconn.scan(cursor, 'intcon:out:*', 100)
+            for key in keys:
+                if not key.endswith(':_gateways'):
+                    parts = key.split(':')
+                    if len(parts) == 3:
+                        outbound_intcons.add(parts[2])
+            if cursor == 0:
+                break
+
+        members = rdbconn.smembers('cluster:members')
+        for intcon_name in outbound_intcons:
+            gw_names = list(rdbconn.hgetall(f'intcon:out:{intcon_name}:_gateways').keys())
+            if not gw_names:
+                continue
+            gw_states = {}
+            for nodeid in members:
+                _socket = rdbconn.hget('DISCOVERY', nodeid)
+                if not _socket:
+                    continue
+                socket_data = json.loads(_socket)
+                try:
+                    fs = redfs.InboundESL(host=socket_data.get('ipaddr'), port=socket_data.get('port'),
+                                          password=socket_data.get('password'), timeout=3)
+                    fs.connect()
+                    if not fs.connected:
+                        continue
+                    for gw in gw_names:
+                        if gw in gw_states:
+                            continue
+                        resp = fs.send(f'api sofia status gateway {gw}')
+                        state = 'UNKNOWN'
+                        if resp and resp.data:
+                            for line in resp.data.split('\n'):
+                                if line.strip().startswith('State'):
+                                    state = line.split()[-1].strip()
+                                    break
+                        gw_states[gw] = state
+                except Exception as e:
+                    logger.warning(f'module=liberator, space=libreapi, action=interconnection_status:esl, intcon={intcon_name}, nodeid={nodeid}, exception={e}')
+
+            if intcon_name not in result['outbound']:
+                result['outbound'][intcon_name] = {'active_calls': 0}
+            result['outbound'][intcon_name]['gateways'] = gw_states
+
+        response.status_code = 200
+    except Exception as e:
+        response.status_code = 500
+        logger.error(f'module=liberator, space=libreapi, action=interconnection_status, requestid={requestid}, exception={e}, traceback={traceback.format_exc()}')
+        result = None
+    return result
+
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # CLUSTER & NODE
