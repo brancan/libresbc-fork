@@ -428,7 +428,9 @@ function GetPresentNode(){
 
 function enrichIntconStatus(presentation, direction) {
     var tableId = presentation + '-table';
-    $('#' + tableId + ' thead tr').append('<th scope="col">Live</th>');
+    if ($('#' + tableId + ' thead th.lsbc-live-col').length === 0) {
+        $('#' + tableId + ' thead tr').append('<th scope="col" class="lsbc-live-col">Live</th>');
+    }
     $('#' + tableId + ' tbody tr').each(function() {
         var name = $(this).find('[data-lsbc-name]').first().data('lsbc-name');
         $(this).append('<td id="intcon-status-' + name + '"><span class="text-muted small">…</span></td>');
@@ -445,17 +447,18 @@ function enrichIntconStatus(presentation, direction) {
                 var calls = d.active_calls != null ? d.active_calls : 0;
                 var html = '<span class="badge ' + (calls > 0 ? 'bg-success' : 'bg-secondary') + '">' + calls + ' calls</span>';
                 if (direction === 'outbound' && d.gateways) {
-                    html += '<div class="mt-1 d-flex gap-1 flex-wrap">';
+                    html += '<div class="mt-1 d-flex gap-1 flex-wrap align-items-center">';
                     Object.entries(d.gateways).forEach(function(entry) {
                         var gw = entry[0], state = entry[1];
                         var cls = state === 'REGED' ? 'up' : state === 'TRYING' ? 'unknown' : 'down';
                         html += '<span class="lsbc-health-dot ' + cls + '" data-bs-toggle="tooltip" data-bs-title="' + LSBC.escapeAttr(gw) + ': ' + LSBC.escapeAttr(state) + '"></span>';
                     });
+                    html += '<button class="btn btn-outline-secondary btn-sm lsbc-gw-rescan ms-1 py-0 px-1" data-lsbc-name="' + LSBC.escapeAttr(name) + '" data-bs-toggle="tooltip" data-bs-title="Rescan gateways" style="font-size:0.7rem;line-height:1.2">↺</button>';
                     html += '</div>';
                 }
                 cell.innerHTML = html;
             });
-            $('#' + tableId + ' .lsbc-health-dot').each(function() {
+            $('#' + tableId + ' .lsbc-health-dot, #' + tableId + ' .lsbc-gw-rescan').each(function() {
                 new bootstrap.Tooltip(this);
             });
         }
@@ -1130,6 +1133,21 @@ $('[data-bs-toggle="tab"]').on('hide.bs.tab', function() {
     if (target && target === '#nav-home') {
         LSBC.autoRefresh.stop('health');
     }
+});
+
+$(document).on('click', '.lsbc-gw-rescan', function() {
+    var btn = $(this);
+    var name = btn.data('lsbc-name');
+    btn.prop('disabled', true).text('…');
+    $.ajax({
+        type: 'POST', url: '/libreapi/interconnection/' + encodeURIComponent(name) + '/rescan', global: false,
+        success: function() {
+            ShowToast('Rescan sent for ' + name, 'success');
+            setTimeout(function() { enrichIntconStatus('outbound-intcon-table', 'outbound'); }, 1500);
+        },
+        error: function(jqXHR) { LSBC.ajaxError(jqXHR); },
+        complete: function() { btn.prop('disabled', false).text('↺'); }
+    });
 });
 
 $(document).on('click', '[data-lsbc-action]', function() {

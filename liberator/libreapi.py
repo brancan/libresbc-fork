@@ -258,6 +258,41 @@ def interconnection_status(response: Response):
     return result
 
 
+@librerouter.post("/libreapi/interconnection/{name}/rescan", status_code=200)
+def rescan_interconnection_gateways(name: str, response: Response):
+    requestid = get_request_uuid()
+    result = {'name': name, 'nodes': {}}
+    try:
+        sipprofile = rdbconn.hget(f'intcon:out:{name}', 'sipprofile')
+        if not sipprofile:
+            response.status_code = 404
+            return {'error': f'outbound interconnection {name} not found'}
+        members = rdbconn.smembers('cluster:members')
+        for nodeid in members:
+            _socket = rdbconn.hget('DISCOVERY', nodeid)
+            if not _socket:
+                continue
+            socket_data = json.loads(_socket)
+            try:
+                fs = redfs.InboundESL(host=socket_data.get('ipaddr'), port=socket_data.get('port'),
+                                      password=socket_data.get('password'), timeout=3)
+                fs.connect()
+                if not fs.connected:
+                    result['nodes'][nodeid] = 'esl_unreachable'
+                    continue
+                fs.send(f'api sofia profile {sipprofile} rescan')
+                result['nodes'][nodeid] = 'ok'
+            except Exception as e:
+                result['nodes'][nodeid] = str(e)
+                logger.warning(f'module=liberator, space=libreapi, action=rescan_gateways:esl, name={name}, nodeid={nodeid}, exception={e}')
+        response.status_code = 200
+    except Exception as e:
+        response.status_code = 500
+        logger.error(f'module=liberator, space=libreapi, action=rescan_gateways, name={name}, requestid={requestid}, exception={e}')
+        result = {'error': str(e)}
+    return result
+
+
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # CLUSTER & NODE
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
