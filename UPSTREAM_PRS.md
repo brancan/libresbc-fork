@@ -20,6 +20,7 @@ Tags asociados a los commits en `local/customizations`:
 | [#212](https://github.com/hnimminh/libresbc/pull/212) | `pr/basemgr-freeswitch-backgrounding-newline`  | PR #179     | basemgr  | OPEN  | - | Fix de 1 línea. Fix aplicado en `local/customizations`. |
 | ?     | `pr/cfgapi-directory-username-hash`            | `b5da7a2`   | cfgapi   | DRAFT | - | `[UPSTREAM-PR:pendiente] fix(cfgapi): include username in hash`          |
 | ?     | `pr/basemgr-cleanup-access-layer`              | `0666083`  | basemgr   | A-VERIFICAR | -        | `[UPSTREAM-PR:pendiente] fix(basemgr): remove access-layer remnants`     |
+| [#214](https://github.com/hnimminh/libresbc/pull/214) | `pr/callng-startup-cleanup-stale-concurentcalls` | `336488f` | callng | OPEN | - | Fix aplicado también en `local/customizations`. |
 
 (Los `?` se reemplazan por el numero real cuando se abren los PRs.)
 

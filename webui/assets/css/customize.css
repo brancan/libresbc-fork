@@ -50,3 +50,14 @@ textarea[is="highlighted-code"] { padding: 8px; }
 .CodeMirror { height: 420px; border-radius: 4px; }
 .lsbc-page-prev, .lsbc-page-next { padding: 0.15rem 0.5rem; }
 .lsbc-refresh-interval { font-size: 0.8rem; }
+
+.lsbc-health-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #adb5bd;
+  flex-shrink: 0;
+}
+.lsbc-health-dot.up      { background: #198754; }
+.lsbc-health-dot.down    { background: #dc3545; }
+.lsbc-health-dot.unknown { background: #ffc107; }

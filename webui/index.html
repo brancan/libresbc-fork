@@ -114,6 +114,63 @@
                   </div>
                 </div>
               </div>
+              <hr>
+              <div class="col-md-12 py-2">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <h6 class="mb-0 text-muted">System Health</h6>
+                  <span class="small text-muted" id="health-updated"></span>
+                </div>
+                <div class="row g-2" id="health-widget">
+                  <div class="col-md-3">
+                    <div class="card h-100" id="health-card-redis">
+                      <div class="card-body p-2">
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="lsbc-health-dot" id="health-dot-redis"></span>
+                          <strong class="small">Redis</strong>
+                        </div>
+                        <div class="small text-muted mt-1" id="health-detail-redis">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="card h-100" id="health-card-freeswitch">
+                      <div class="card-body p-2">
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="lsbc-health-dot" id="health-dot-freeswitch"></span>
+                          <strong class="small">FreeSWITCH</strong>
+                        </div>
+                        <div class="small text-muted mt-1" id="health-detail-freeswitch">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="card h-100" id="health-card-liberator">
+                      <div class="card-body p-2">
+                        <div class="d-flex align-items-center gap-2">
+                          <span class="lsbc-health-dot" id="health-dot-liberator"></span>
+                          <strong class="small">Liberator</strong>
+                        </div>
+                        <div class="small text-muted mt-1" id="health-detail-liberator">—</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="card h-100 border-primary">
+                      <div class="card-body p-2">
+                        <div class="d-flex align-items-center gap-2">
+                          <i class="fa fa-phone text-primary"></i>
+                          <strong class="small">Active Calls</strong>
+                        </div>
+                        <div class="mt-1">
+                          <span class="badge bg-primary" id="health-calls-total">—</span>
+                          <span class="small text-muted ms-1">total</span>
+                        </div>
+                        <div class="small text-muted mt-1" id="health-calls-detail">—</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
             <!--##### BASE --->
             <div class="tab-pane fade" id="nav-cfg-netalias-base" role="tabpanel" aria-labelledby="cfg-netalias-base-tab">

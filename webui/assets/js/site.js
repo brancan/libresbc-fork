@@ -319,6 +319,46 @@ const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]
 const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
 /*---------------------------------------------------------------------------*/
 
+function GetHealthStatus() {
+    $.ajax({
+        type: "GET",
+        url: '/libreapi/health',
+        success: function(data) {
+            function setService(key, status, detail) {
+                var dot = document.getElementById('health-dot-' + key);
+                var det = document.getElementById('health-detail-' + key);
+                if (dot) { dot.className = 'lsbc-health-dot ' + status; }
+                if (det) { det.textContent = detail; }
+            }
+            setService('redis',
+                data.redis.status,
+                data.redis.status === 'up'
+                    ? data.redis.used_memory_human + ' mem · ' + data.redis.latency_ms + 'ms'
+                    : (data.redis.error || 'down'));
+            var fsNodes = data.freeswitch || [];
+            var fsUp = fsNodes.filter(function(n){ return n.status === 'up'; }).length;
+            setService('freeswitch',
+                fsUp === fsNodes.length && fsNodes.length > 0 ? 'up' : fsNodes.length === 0 ? 'unknown' : 'down',
+                fsNodes.length === 0 ? 'no nodes'
+                    : fsNodes.map(function(n){ return n.nodeid + ': ' + n.status; }).join(' · '));
+            setService('liberator', data.liberator.status, data.liberator.version);
+            var calls = data.active_calls || {};
+            var total = document.getElementById('health-calls-total');
+            var detail = document.getElementById('health-calls-detail');
+            if (total) total.textContent = calls.total != null ? calls.total : '—';
+            if (detail) detail.textContent = 'in: ' + (calls.inbound || 0) + '  out: ' + (calls.outbound || 0);
+            var updated = document.getElementById('health-updated');
+            if (updated) updated.textContent = 'updated ' + new Date().toLocaleTimeString();
+        },
+        error: function() {
+            ['redis','freeswitch','liberator'].forEach(function(k) {
+                var dot = document.getElementById('health-dot-' + k);
+                if (dot) dot.className = 'lsbc-health-dot down';
+            });
+        }
+    });
+}
+
 function GetPresentNode(){
     $.ajax({
         type: "GET",
@@ -381,6 +421,45 @@ function GetPresentNode(){
             LSBC.ajaxError(jqXHR);
         }
     });
+
+    GetHealthStatus();
+    LSBC.autoRefresh.start('health', GetHealthStatus, 30000);
+}
+
+function enrichIntconStatus(presentation, direction) {
+    var tableId = presentation + '-table';
+    $('#' + tableId + ' thead tr').append('<th scope="col">Live</th>');
+    $('#' + tableId + ' tbody tr').each(function() {
+        var name = $(this).find('[data-lsbc-name]').first().data('lsbc-name');
+        $(this).append('<td id="intcon-status-' + name + '"><span class="text-muted small">…</span></td>');
+    });
+    $.ajax({
+        type: 'GET', url: '/libreapi/interconnection/status', global: false,
+        success: function(statusData) {
+            var dirData = statusData[direction] || {};
+            $('#' + tableId + ' tbody tr').each(function() {
+                var name = $(this).find('[data-lsbc-name]').first().data('lsbc-name');
+                var d = dirData[name] || {};
+                var cell = document.getElementById('intcon-status-' + name);
+                if (!cell) return;
+                var calls = d.active_calls != null ? d.active_calls : 0;
+                var html = '<span class="badge ' + (calls > 0 ? 'bg-success' : 'bg-secondary') + '">' + calls + ' calls</span>';
+                if (direction === 'outbound' && d.gateways) {
+                    html += '<div class="mt-1 d-flex gap-1 flex-wrap">';
+                    Object.entries(d.gateways).forEach(function(entry) {
+                        var gw = entry[0], state = entry[1];
+                        var cls = state === 'REGED' ? 'up' : state === 'TRYING' ? 'unknown' : 'down';
+                        html += '<span class="lsbc-health-dot ' + cls + '" data-bs-toggle="tooltip" data-bs-title="' + LSBC.escapeAttr(gw) + ': ' + LSBC.escapeAttr(state) + '"></span>';
+                    });
+                    html += '</div>';
+                }
+                cell.innerHTML = html;
+            });
+            $('#' + tableId + ' .lsbc-health-dot').each(function() {
+                new bootstrap.Tooltip(this);
+            });
+        }
+    });
 }
 
 function GeneralGetPresent(SettingName){
@@ -399,6 +478,8 @@ function GeneralGetPresent(SettingName){
             else{
                 GeneralPresentData(data, SettingName, presentation);
             }
+            if (SettingName === 'Inbound') enrichIntconStatus(presentation, 'inbound');
+            if (SettingName === 'Outbound') enrichIntconStatus(presentation, 'outbound');
         },
         error: function(jqXHR) {
             document.getElementById(presentation).innerHTML = EMPTYSTR;
@@ -1042,8 +1123,12 @@ $(document).on('change', '#autorefresh-inbound', function() {
 $('[data-bs-toggle="tab"]').on('hide.bs.tab', function() {
     var target = $(this).attr('data-bs-target') || $(this).attr('href');
     if (target && target.indexOf('intcon') !== -1) {
-        LSBC.autoRefresh.stopAll();
+        LSBC.autoRefresh.stop('inbound');
+        LSBC.autoRefresh.stop('outbound');
         $('#autorefresh-inbound, #autorefresh-outbound').prop('checked', false);
+    }
+    if (target && target === '#nav-home') {
+        LSBC.autoRefresh.stop('health');
     }
 });
 
