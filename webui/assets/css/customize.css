@@ -41,3 +41,12 @@
   }
 
 textarea[is="highlighted-code"] { padding: 8px; }
+
+#progessdot { transition: opacity 0.2s ease; }
+
+.lsbc-filter { max-width: 280px; }
+
+#cm-json-error { font-size: 0.8rem; }
+.CodeMirror { height: 420px; border-radius: 4px; }
+.lsbc-page-prev, .lsbc-page-next { padding: 0.15rem 0.5rem; }
+.lsbc-refresh-interval { font-size: 0.8rem; }

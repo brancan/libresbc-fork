@@ -1,3 +1,5 @@
+const LSBC = {};
+
 const EMPTYSTR = '';
 const APIGuide = {
     "Cluster": {
@@ -322,9 +324,8 @@ function GetPresentNode(){
         type: "GET",
         url: '/libreapi/predefine',
         success: function (data) {
-            ShowProgress();
             let CandidateHtml = EMPTYSTR;
-            data.candidates.forEach((element) => {
+            (data.candidates || []).forEach((element) => {
                 CandidateHtml = `${CandidateHtml}<span class="badge bg-secondary rounded-pill" id="cdr-bucket">${element}</span>`;
             });
             document.getElementById('node-info').innerHTML = `
@@ -338,10 +339,9 @@ function GetPresentNode(){
                 Node Candidates
                 <div>${CandidateHtml}</div></li>`;
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
+        error: function(jqXHR) {
             document.getElementById('node-info').innerHTML = EMPTYSTR;
-            ShowToast(jqXHR.responseJSON.error);
+            LSBC.ajaxError(jqXHR);
         }
     });
 
@@ -349,7 +349,6 @@ function GetPresentNode(){
         type: "GET",
         url: '/libreapi/cluster',
         success: function (data) {
-            ShowProgress();
             let MembersHtml = EMPTYSTR;
             data.members.forEach((element) => {
                 MembersHtml = `${MembersHtml}<span class="badge bg-dark rounded-pill" id="cdr-bucket">${element}</span>`;
@@ -377,10 +376,9 @@ function GetPresentNode(){
                 <span class="badge bg-light text-dark rounded-pill" id="cdr-bucket">${data.rtp_start_port}-${data.rtp_end_port}</span>
             </div>`;
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
+        error: function(jqXHR) {
             document.getElementById('cluster-info').innerHTML = EMPTYSTR;
-            ShowToast(jqXHR.responseJSON.error);
+            LSBC.ajaxError(jqXHR);
         }
     });
 }
@@ -392,7 +390,6 @@ function GeneralGetPresent(SettingName){
         type: "GET",
         url: path,
         success: function (data) {
-            ShowProgress();
             if (SettingName === 'RoutingTable'){
                 RoutingTablePresentData(data, presentation);
             }
@@ -403,10 +400,9 @@ function GeneralGetPresent(SettingName){
                 GeneralPresentData(data, SettingName, presentation);
             }
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
+        error: function(jqXHR) {
             document.getElementById(presentation).innerHTML = EMPTYSTR;
-            ShowToast(jqXHR.responseJSON.error);
+            LSBC.ajaxError(jqXHR);
         }
     });
 }
@@ -423,15 +419,16 @@ function GeneralPresentData(DataList, SettingName, presentation){
         <td>${name}</td>
         <td>${desc}</td>
         <td>
-          <button class="btn btn-danger btn-sm" type="button"><i class="fa fa-times-circle" onclick="GeneralRemove('${name}','${SettingName}')"></i></button>
-          <button class="btn btn-success btn-sm" type="button"><i class="fa fa-pencil" onclick="GeneralModify('${name}','${SettingName}')"></i></button>
+          <button class="btn btn-danger btn-sm" type="button" data-lsbc-action="remove" data-lsbc-name="${LSBC.escapeAttr(name)}" data-lsbc-setting="${LSBC.escapeAttr(SettingName)}"><i class="fa fa-times-circle"></i></button>
+          <button class="btn btn-success btn-sm" type="button" data-lsbc-action="modify" data-lsbc-name="${LSBC.escapeAttr(name)}" data-lsbc-setting="${LSBC.escapeAttr(SettingName)}"><i class="fa fa-pencil"></i></button>
         </td>
         </tr>`;
         tablebody = tablebody + htmltb;
         cnt++;
     });
     document.getElementById(presentation).innerHTML = `
-        <table class="table">
+        <input type="text" class="form-control form-control-sm mb-2 lsbc-filter" placeholder="Filter ${SettingName}..." id="${presentation}-filter">
+        <table class="table" id="${presentation}-table">
           <thead class="table-light">
           <tr>
             <th scope="col">#</th>
@@ -443,7 +440,10 @@ function GeneralPresentData(DataList, SettingName, presentation){
           <tbody>
             ${tablebody}
           </tbody>
-        </table>`;
+        </table>
+        <div id="${presentation}-table-pagination"></div>`;
+    LSBC.filter.attach('#' + presentation + '-filter', presentation + '-table');
+    LSBC.paginate.attach(presentation + '-table', 25);
 }
 
 // remove button
@@ -454,19 +454,14 @@ function GeneralRemove(name, SettingName){
         url: `${path}/${name}`,
         success: function (data) {
             ShowToast(`Delete Successfully ${SettingName} ${name}`, "info");
-            ShowProgress();
             GeneralGetPresent(SettingName);
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
-            ShowToast(jqXHR.responseJSON.error);
-        }
+        error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
 }
 
 // modify/update button
 function GeneralModify(name, SettingName){
-    ShowProgress();
     let path = APIGuide[SettingName]['path']
     let url = APIGuide[SettingName]['path'] + "/" + name
     if (name===EMPTYSTR) {
@@ -484,17 +479,14 @@ function GeneralModify(name, SettingName){
                 PresentCanvas(data, name, SettingName, 'PUT');
             }
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
-            ShowToast(jqXHR.responseJSON.error);
-        }
+        error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
 }
 
 // submit button in canvas
 function GeneralSubmit(name, SettingName, method="POST"){
     let path = APIGuide[SettingName]['path'];
-    let jsonstring = ConfigDetailTextH.value;
+    let jsonstring = LSBC.editor.getValue() || ConfigDetailTextH.value;
 
     // create or update
     let url = path;
@@ -509,6 +501,8 @@ function GeneralSubmit(name, SettingName, method="POST"){
     if (SettingName==='RoutingRecord') {
         url = path;
     }
+
+    try { JSON.parse(jsonstring); } catch(e) { ShowToast('Invalid JSON: ' + e.message, 'danger'); return; }
 
     $.ajax({
         type: method,
@@ -529,10 +523,7 @@ function GeneralSubmit(name, SettingName, method="POST"){
             }
             offcanvaspanel.hide();
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
-            ShowToast(jqXHR.responseJSON.error);
-        }
+        error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
 }
 
@@ -569,9 +560,9 @@ function AccessDomainPresentData(data, presentation){
               <div class="col-md-6 col-lg-6">
                 <div class="row">
                   <div class="btn-group" role="group">
-                    <button type="button" class="btn btn-outline-primary text-start" onclick="AccessDomainPolicyDetail('${Adomain}')"><i class="fa fa-refresh"></i> Load Policy</button>
-                    <button type="button" class="btn btn-outline-primary text-start" onclick="GeneralModify('${Adomain}','AccessDomainPolicy')"><i class="fa fa-pencil-square-o"></i> Update Policy</button>
-                    <button type="button" class="btn btn-outline-danger text-start" onclick="GeneralRemove('${Adomain}','AccessDomainPolicy')"><i class="fa fa-trash"></i> Delete Policy</button>
+                    <button type="button" class="btn btn-outline-primary text-start" data-lsbc-action="load-policy" data-lsbc-name="${LSBC.escapeAttr(Adomain)}"><i class="fa fa-refresh"></i> Load Policy</button>
+                    <button type="button" class="btn btn-outline-primary text-start" data-lsbc-action="modify" data-lsbc-name="${LSBC.escapeAttr(Adomain)}" data-lsbc-setting="AccessDomainPolicy"><i class="fa fa-pencil-square-o"></i> Update Policy</button>
+                    <button type="button" class="btn btn-outline-danger text-start" data-lsbc-action="remove" data-lsbc-name="${LSBC.escapeAttr(Adomain)}" data-lsbc-setting="AccessDomainPolicy"><i class="fa fa-trash"></i> Delete Policy</button>
                   </div>
                 </div>
                 <br>
@@ -583,8 +574,8 @@ function AccessDomainPresentData(data, presentation){
                 <div class="row g-3 justify-content-end">
                   <div class="col-md-6 col-lg-6">
                     <div class="btn-group" role="group">
-                      <button type="button" class="btn btn-primary text-start" onclick="GeneralCreate('AccessUserDirectory','${Adomain}')"><i class="fa fa-plus-square-o"></i> Create User</button>
-                      <button type="button" class="btn btn-primary text-start" onclick="AccessUserDirectoryDetail('${Adomain}')"><i class="fa fa-refresh"></i> Load Users</button>
+                      <button type="button" class="btn btn-primary text-start" data-lsbc-action="create" data-lsbc-setting="AccessUserDirectory" data-lsbc-name="${LSBC.escapeAttr(Adomain)}"><i class="fa fa-plus-square-o"></i> Create User</button>
+                      <button type="button" class="btn btn-primary text-start" data-lsbc-action="load-users" data-lsbc-name="${LSBC.escapeAttr(Adomain)}"><i class="fa fa-refresh"></i> Load Users</button>
                     </div>
                   </div>
                 </div>
@@ -609,7 +600,6 @@ function AccessDomainPolicyDetail(Adomain){
         type: "GET",
         url: `/libreapi/access/domain-policy/${Adomain}`,
         success: function (data) {
-            ShowProgress();
             document.getElementById(`DetailAD${Adomain}`).innerHTML = `
             <div class="card border-primary">
               <div class="card-body text-primary">
@@ -617,10 +607,9 @@ function AccessDomainPolicyDetail(Adomain){
               </div>
             </div>`;
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
+        error: function(jqXHR) {
             document.getElementById(`DetailAD${Adomain}`).innerHTML = EMPTYSTR;
-            ShowToast(jqXHR.responseJSON.error);
+            LSBC.ajaxError(jqXHR);
         }
     });
 }
@@ -631,7 +620,6 @@ function AccessUserDirectoryDetail(Adomain){
         type: "GET",
         url: `/libreapi/access/directory/user/${Adomain}`,
         success: function (data) {
-            ShowProgress();
             let usertable = EMPTYSTR;
             let cnt = 1;
             users = [];
@@ -643,8 +631,8 @@ function AccessUserDirectoryDetail(Adomain){
                 <tr>
                   <td>${cnt}</td> <td>${user}</td>
                   <td>
-                    <button class="btn btn-danger btn-sm" type="button"><i class="fa fa-times-circle" onclick="RemoveAccessUser('${Adomain}','${user}')"></i></button>
-                    <button class="btn btn-success btn-sm" type="button"><i class="fa fa-pencil" onclick="UpdateAccessUser('${Adomain}','${user}')"></i></button>
+                    <button class="btn btn-danger btn-sm" type="button" data-lsbc-action="remove-access-user" data-lsbc-domain="${LSBC.escapeAttr(Adomain)}" data-lsbc-name="${LSBC.escapeAttr(user)}"><i class="fa fa-times-circle"></i></button>
+                    <button class="btn btn-success btn-sm" type="button" data-lsbc-action="update-access-user" data-lsbc-domain="${LSBC.escapeAttr(Adomain)}" data-lsbc-name="${LSBC.escapeAttr(user)}"><i class="fa fa-pencil"></i></button>
                   </td>
                 </tr>`;
                 usertable = usertable + userhtml;
@@ -668,10 +656,9 @@ function AccessUserDirectoryDetail(Adomain){
                 document.getElementById(`TableAD${Adomain}`).innerHTML = EMPTYSTR;
             }
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
+        error: function(jqXHR) {
             document.getElementById(`TableAD${Adomain}`).innerHTML = EMPTYSTR;
-            ShowToast(jqXHR.responseJSON.error);
+            LSBC.ajaxError(jqXHR);
         }
     });
 }
@@ -685,19 +672,14 @@ function RemoveAccessUser(domain, user){
         url: `${path}/${domain}/${user}`,
         success: function (data) {
             ShowToast(`Delete Successfully ${SettingName} ${user}@${domain}`, "info");
-            ShowProgress();
             AccessUserDirectoryDetail(domain);
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
-            ShowToast(jqXHR.responseJSON.error);
-        }
+        error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
 }
 
 // Access user directory partial update user
 function UpdateAccessUser(domain, user){
-    ShowProgress();
     let SettingName = 'AccessUserDirectory';
     let url = APIGuide[SettingName]['path'] + "/" + domain + "/" + user;
     $.ajax({
@@ -713,10 +695,7 @@ function UpdateAccessUser(domain, user){
             // canvas
             PresentCanvas(userdata, domain, SettingName, 'PATCH');
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
-            ShowToast(jqXHR.responseJSON.error);
-        }
+        error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
 }
 
@@ -732,7 +711,7 @@ function RoutingTablePresentData(data, presentation){
 
         let newRecordButton = EMPTYSTR;
         if (rtbAction === 'query'){
-            newRecordButton = `<button type="button" class="btn btn-outline-primary text-start" onclick="GeneralCreate('RoutingRecord','${rtbName}')"><i class="fa fa-plus-square-o"></i> Create Record</button>`;
+            newRecordButton = `<button type="button" class="btn btn-outline-primary text-start" data-lsbc-action="create" data-lsbc-setting="RoutingRecord" data-lsbc-name="${LSBC.escapeAttr(rtbName)}"><i class="fa fa-plus-square-o"></i> Create Record</button>`;
         }
 
         rtblhtml = `
@@ -747,9 +726,9 @@ function RoutingTablePresentData(data, presentation){
             <div class="row">
               <div class="col-md-4 col-lg-4">
                 <div class="btn-group-vertical" role="group">
-                  <button type="button" class="btn btn-outline-primary text-start" onclick="RoutingTableDetail('${rtbName}')"><i class="fa fa-refresh"></i> Load Table</button>
-                  <button type="button" class="btn btn-outline-primary text-start" onclick="GeneralModify('${rtbName}','RoutingTable')"><i class="fa fa-pencil-square-o"></i> Update Table</button>
-                  <button type="button" class="btn btn-outline-danger text-start" onclick="GeneralRemove('${rtbName}','RoutingTable')"><i class="fa fa-trash"></i> Delete Table</button>
+                  <button type="button" class="btn btn-outline-primary text-start" data-lsbc-action="load-routing-table" data-lsbc-name="${LSBC.escapeAttr(rtbName)}"><i class="fa fa-refresh"></i> Load Table</button>
+                  <button type="button" class="btn btn-outline-primary text-start" data-lsbc-action="modify" data-lsbc-name="${LSBC.escapeAttr(rtbName)}" data-lsbc-setting="RoutingTable"><i class="fa fa-pencil-square-o"></i> Update Table</button>
+                  <button type="button" class="btn btn-outline-danger text-start" data-lsbc-action="remove" data-lsbc-name="${LSBC.escapeAttr(rtbName)}" data-lsbc-setting="RoutingTable"><i class="fa fa-trash"></i> Delete Table</button>
                   ${newRecordButton}
                 </div>
               </div>
@@ -772,7 +751,6 @@ function RoutingTableDetail(Rtablename){
         type: "GET",
         url: `/libreapi/routing/table/${Rtablename}`,
         success: function (data) {
-            ShowProgress();
             records = data.records;
             delete data['records'];
             document.getElementById(`DetailRT${Rtablename}`).innerHTML = `
@@ -800,8 +778,8 @@ function RoutingTableDetail(Rtablename){
                 <tr>
                   <td>${cnt}</td> <td>${match}</td> <td>${value}</td> <td>${action}</td> <td>${primary}</td> <td>${secondary}</td> <td>${load}</td>
                   <td>
-                    <button class="btn btn-danger btn-sm" type="button"><i class="fa fa-times-circle" onclick="RemoveRoutingRecord('${Rtablename}','${match}','${value}')"></i></button>
-                    <button class="btn btn-success btn-sm" type="button"><i class="fa fa-pencil" onclick="UpdateRoutingRecord('${Rtablename}','${match}','${value}','${action}','${primary}','${secondary}','${load}')"></i></button>
+                    <button class="btn btn-danger btn-sm" type="button" data-lsbc-action="remove-routing-record" data-lsbc-name="${LSBC.escapeAttr(Rtablename)}" data-lsbc-match="${LSBC.escapeAttr(match)}" data-lsbc-value="${LSBC.escapeAttr(value)}"><i class="fa fa-times-circle"></i></button>
+                    <button class="btn btn-success btn-sm" type="button" data-lsbc-action="update-routing-record" data-lsbc-name="${LSBC.escapeAttr(Rtablename)}" data-lsbc-match="${LSBC.escapeAttr(match)}" data-lsbc-value="${LSBC.escapeAttr(value)}" data-lsbc-rtaction="${LSBC.escapeAttr(action)}" data-lsbc-primary="${LSBC.escapeAttr(primary)}" data-lsbc-secondary="${LSBC.escapeAttr(secondary)}" data-lsbc-load="${LSBC.escapeAttr(load)}"><i class="fa fa-pencil"></i></button>
                   </td>
                 </tr>`;
                 recordtable = recordtable + recordhtml;
@@ -828,10 +806,9 @@ function RoutingTableDetail(Rtablename){
                 </table>`;
             };
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
+        error: function(jqXHR) {
             document.getElementById("DetailRT"+Rtablename).innerHTML = EMPTYSTR;
-            ShowToast(jqXHR.responseJSON.error);
+            LSBC.ajaxError(jqXHR);
         }
     });
 }
@@ -844,18 +821,13 @@ function RemoveRoutingRecord(tablename, match, value){
         url: `${path}/${tablename}/${match}/${value}`,
         success: function (data) {
             ShowToast(`Delete Successfully ${SettingName} ${tablename} ${match} ${value}`, "info");
-            ShowProgress();
             RoutingTableDetail(tablename);
         },
-        error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
-            ShowToast(jqXHR.responseJSON.error);
-        }
+        error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
 }
 
 function UpdateRoutingRecord(tablename, match, value, action, primary, secondary, load){
-    ShowProgress();
     let SettingName = 'RoutingRecord';
     let record = {
         "table": tablename,
@@ -879,30 +851,18 @@ function UpdateRoutingRecord(tablename, match, value, action, primary, secondary
 function PresentCanvas(Data, ObjectName, SettingName, method){
     ConfigDetailTextH.value = JSON.stringify(Data, undefined, 4);
     PanelLabelH.innerHTML = `${SettingName}  <strong><code>${ObjectName}</code></strong>`;
-    ConfigSubmitBntH.setAttribute('onclick',`GeneralSubmit('${ObjectName}','${SettingName}','${method}')`);
+    ConfigSubmitBntH.dataset.lsbcAction = 'submit';
+    ConfigSubmitBntH.dataset.lsbcName = ObjectName;
+    ConfigSubmitBntH.dataset.lsbcSetting = SettingName;
+    ConfigSubmitBntH.dataset.lsbcMethod = method;
 
     var OffCanvasHtml = document.getElementById("offcanvaspanel");
     offcanvaspanel = new bootstrap.Offcanvas(OffCanvasHtml);
     offcanvaspanel.show();
+    LSBC.editor.mount(ConfigDetailTextH);
 }
 
-function PrettyCode(){
-    //
-    // https://github.com/WebReflection/highlighted-code
-    //
-    (async ({chrome, netscape}) => {
-        // add Safari polyfill if needed
-        if (!chrome && !netscape)
-          await import('https://unpkg.com/@ungap/custom-elements');
-
-        const {default: HighlightedCode} =
-          await import('https://unpkg.com/highlighted-code');
-
-        // bootstrap a theme through one of these names
-        // https://github.com/highlightjs/highlight.js/tree/main/src/styles
-        HighlightedCode.useTheme('monokai-sublime'); //intellij-light,monokai-sublime/googlecode/idea/github
-    })(self);
-}
+function PrettyCode(){ LSBC.editor.mount(ConfigDetailTextH); }
 
 /* ---------------------------------------------------------------------------
     PROGRESS STATE
@@ -918,28 +878,214 @@ function ShowProgress(){
     777);
 }
 
-function ShowToast(message, msgtype='danger'){
-    if (msgtype === 'danger'){
-        ToastMsgEMLS.classList.add('bg-danger');
-        ToastMsgEMLS.classList.remove('bg-primary');
-        ToastMsgEMLS.classList.remove('bg-warning');
-        ToastMsgEMLS.classList.remove('bg-success');
-    }else if (msgtype === 'success'){
-        ToastMsgEMLS.classList.add('bg-success');
-        ToastMsgEMLS.classList.remove('bg-primary');
-        ToastMsgEMLS.classList.remove('bg-danger');
-        ToastMsgEMLS.classList.remove('bg-warning');
-    }else if (msgtype === 'warning'){
-        ToastMsgEMLS.classList.add('bg-warning');
-        ToastMsgEMLS.classList.remove('bg-primary');
-        ToastMsgEMLS.classList.remove('bg-danger');
-        ToastMsgEMLS.classList.remove('bg-success');
-    }else {
-        ToastMsgEMLS.classList.add('bg-primary');
-        ToastMsgEMLS.classList.remove('bg-danger');
-        ToastMsgEMLS.classList.remove('bg-warning');
-        ToastMsgEMLS.classList.remove('bg-success');
+LSBC.escapeAttr = function(val) {
+    return String(val).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+};
+
+LSBC.ajaxError = function(jqXHR) {
+    var msg = (jqXHR.responseJSON && jqXHR.responseJSON.detail) ? jqXHR.responseJSON.detail
+            : (jqXHR.responseJSON && jqXHR.responseJSON.error) ? jqXHR.responseJSON.error
+            : (jqXHR.statusText || 'Network error');
+    ShowToast(msg, 'danger');
+};
+
+LSBC.confirm = function(message) {
+    return new Promise(function(resolve) {
+        document.getElementById('confirm-modal-body').textContent = message;
+        var modal = new bootstrap.Modal(document.getElementById('confirm-modal'));
+        document.getElementById('confirm-modal-ok').onclick = function() { modal.hide(); resolve(); };
+        modal.show();
+    });
+};
+
+LSBC._ajaxCount = 0;
+$(document).ajaxStart(function() {
+    LSBC._ajaxCount++;
+    ProgressDotELMS.classList.remove('invisible');
+}).ajaxStop(function() {
+    LSBC._ajaxCount = 0;
+    ProgressDotELMS.classList.add('invisible');
+});
+
+LSBC.filter = {
+    attach: function(inputEl, tableId) {
+        $(inputEl).on('input', function() {
+            var q = this.value.toLowerCase();
+            $('#' + tableId + ' tbody tr').each(function() {
+                $(this).toggle($(this).text().toLowerCase().indexOf(q) > -1);
+            });
+            LSBC.paginate.attach(tableId, 25);
+        });
     }
-    document.getElementById('event-message').innerHTML = message;
+};
+
+LSBC.editor = {
+    _cm: null,
+    mount: function(textareaEl) {
+        if (this._cm) { this._cm.toTextArea(); this._cm = null; }
+        if (typeof CodeMirror === 'undefined') return;
+        this._cm = CodeMirror.fromTextArea(textareaEl, {
+            mode: 'application/json',
+            theme: 'monokai',
+            lineNumbers: true,
+            matchBrackets: true,
+            autoCloseBrackets: true,
+            lineWrapping: false,
+            tabSize: 2
+        });
+        this._cm.on('change', function(cm) {
+            var errEl = document.getElementById('cm-json-error');
+            if (!errEl) return;
+            try { JSON.parse(cm.getValue()); errEl.style.display = 'none'; }
+            catch(e) { errEl.textContent = e.message; errEl.style.display = ''; }
+        });
+    },
+    getValue: function() {
+        return this._cm ? this._cm.getValue() : null;
+    }
+};
+
+LSBC.paginate = {
+    _state: {},
+    attach: function(tableId, pageSize) {
+        pageSize = pageSize || 25;
+        var state = this._state[tableId] = { page: 0, size: pageSize };
+        var self = this;
+        function render() {
+            var rows = $('#' + tableId + ' tbody tr:not([hidden])');
+            var total = rows.length;
+            var pages = Math.max(1, Math.ceil(total / state.size));
+            state.page = Math.min(state.page, pages - 1);
+            rows.each(function(i) {
+                $(this).toggle(i >= state.page * state.size && i < (state.page + 1) * state.size);
+            });
+            var footerId = tableId + '-pagination';
+            var footer = document.getElementById(footerId);
+            if (!footer) return;
+            footer.innerHTML = total <= state.size ? '' :
+                '<div class="d-flex align-items-center gap-2 mt-1">' +
+                '<button class="btn btn-sm btn-outline-secondary lsbc-page-prev" ' + (state.page === 0 ? 'disabled' : '') + '>&laquo;</button>' +
+                '<span class="small">Page ' + (state.page + 1) + ' / ' + pages + ' (' + total + ' items)</span>' +
+                '<button class="btn btn-sm btn-outline-secondary lsbc-page-next" ' + (state.page >= pages - 1 ? 'disabled' : '') + '>&raquo;</button>' +
+                '</div>';
+            $(footer).find('.lsbc-page-prev').off('click').on('click', function() { state.page--; render(); });
+            $(footer).find('.lsbc-page-next').off('click').on('click', function() { state.page++; render(); });
+        }
+        render();
+        return render;
+    }
+};
+
+LSBC.autoRefresh = {
+    _timers: {},
+    start: function(key, fn, intervalMs) {
+        this.stop(key);
+        fn();
+        var self = this;
+        function tick() {
+            if (!document.hidden) fn();
+            self._timers[key] = setTimeout(tick, intervalMs);
+        }
+        this._timers[key] = setTimeout(tick, intervalMs);
+    },
+    stop: function(key) {
+        if (this._timers[key]) { clearTimeout(this._timers[key]); delete this._timers[key]; }
+    },
+    stopAll: function() {
+        var self = this;
+        Object.keys(this._timers).forEach(function(k) { self.stop(k); });
+    }
+};
+
+$(document).on('change', '#autorefresh-inbound', function() {
+    localStorage.setItem('lsbc.ar.inbound', this.checked ? '1' : '0');
+    if (this.checked) {
+        var ms = parseInt($('#autorefresh-inbound-interval').val());
+        LSBC.autoRefresh.start('inbound', function() { GeneralGetPresent('Inbound'); }, ms);
+    } else {
+        LSBC.autoRefresh.stop('inbound');
+    }
+}).on('change', '#autorefresh-inbound-interval', function() {
+    localStorage.setItem('lsbc.ar.inbound.ms', this.value);
+    if ($('#autorefresh-inbound').is(':checked')) {
+        var ms = parseInt(this.value);
+        LSBC.autoRefresh.start('inbound', function() { GeneralGetPresent('Inbound'); }, ms);
+    }
+}).on('change', '#autorefresh-outbound', function() {
+    localStorage.setItem('lsbc.ar.outbound', this.checked ? '1' : '0');
+    if (this.checked) {
+        var ms = parseInt($('#autorefresh-outbound-interval').val());
+        LSBC.autoRefresh.start('outbound', function() { GeneralGetPresent('Outbound'); }, ms);
+    } else {
+        LSBC.autoRefresh.stop('outbound');
+    }
+}).on('change', '#autorefresh-outbound-interval', function() {
+    localStorage.setItem('lsbc.ar.outbound.ms', this.value);
+    if ($('#autorefresh-outbound').is(':checked')) {
+        var ms = parseInt(this.value);
+        LSBC.autoRefresh.start('outbound', function() { GeneralGetPresent('Outbound'); }, ms);
+    }
+});
+
+(function restoreAutoRefresh() {
+    ['inbound','outbound'].forEach(function(dir) {
+        var enabled = localStorage.getItem('lsbc.ar.' + dir) === '1';
+        var ms = parseInt(localStorage.getItem('lsbc.ar.' + dir + '.ms') || '30000');
+        if (enabled) {
+            $('#autorefresh-' + dir).prop('checked', true);
+            $('#autorefresh-' + dir + '-interval').val(ms);
+            LSBC.autoRefresh.start(dir, function() { GeneralGetPresent(dir.charAt(0).toUpperCase() + dir.slice(1)); }, ms);
+        }
+    });
+})();
+
+$('[data-bs-toggle="tab"]').on('hide.bs.tab', function() {
+    var target = $(this).attr('data-bs-target') || $(this).attr('href');
+    if (target && target.indexOf('intcon') !== -1) {
+        LSBC.autoRefresh.stopAll();
+        $('#autorefresh-inbound, #autorefresh-outbound').prop('checked', false);
+    }
+});
+
+$(document).on('click', '[data-lsbc-action]', function() {
+    const action = $(this).data('lsbc-action');
+    const name = $(this).data('lsbc-name');
+    const setting = $(this).data('lsbc-setting');
+    const method = $(this).data('lsbc-method');
+    if (action === 'remove') LSBC.confirm('Delete ' + setting + ' "' + name + '"?').then(function() { GeneralRemove(name, setting); });
+    if (action === 'modify') GeneralModify(name, setting);
+    if (action === 'submit') GeneralSubmit(name, setting, method);
+    if (action === 'remove-access-user') {
+        const domain = $(this).data('lsbc-domain');
+        LSBC.confirm('Delete user "' + name + '@' + domain + '"?').then(function() { RemoveAccessUser(domain, name); });
+    }
+    if (action === 'remove-routing-record') {
+        const match = $(this).data('lsbc-match');
+        const value = $(this).data('lsbc-value');
+        LSBC.confirm('Delete routing record ' + match + '/' + value + '?').then(function() { RemoveRoutingRecord(name, match, value); });
+    }
+    if (action === 'load-users') { AccessUserDirectoryDetail(name); }
+    if (action === 'load-policy') { AccessDomainPolicyDetail(name); }
+    if (action === 'load-routing-table') { RoutingTableDetail(name); }
+    if (action === 'create') { GeneralCreate(setting, name); }
+    if (action === 'update-access-user') {
+        const domain = $(this).data('lsbc-domain');
+        UpdateAccessUser(domain, name);
+    }
+    if (action === 'update-routing-record') {
+        const match = $(this).data('lsbc-match');
+        const value = $(this).data('lsbc-value');
+        const rtaction = $(this).data('lsbc-rtaction');
+        const primary = $(this).data('lsbc-primary');
+        const secondary = $(this).data('lsbc-secondary');
+        const load = $(this).data('lsbc-load');
+        UpdateRoutingRecord(name, match, value, rtaction, primary, secondary, load);
+    }
+});
+
+function ShowToast(message, msgtype='danger'){
+    ToastMsgEMLS.classList.remove('bg-danger','bg-success','bg-warning','bg-primary','bg-info');
+    ToastMsgEMLS.classList.add('bg-' + msgtype);
+    document.getElementById('event-message').textContent = message;
     $('.toast').toast('show');
 }
