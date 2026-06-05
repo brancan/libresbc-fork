@@ -347,6 +347,8 @@ function GetHealthStatus() {
             var detail = document.getElementById('health-calls-detail');
             if (total) total.textContent = calls.total != null ? calls.total : '—';
             if (detail) detail.textContent = 'in: ' + (calls.inbound || 0) + '  out: ' + (calls.outbound || 0);
+            var cps = document.getElementById('health-cps');
+            if (cps) cps.textContent = calls.cps != null ? calls.cps : '—';
             var updated = document.getElementById('health-updated');
             if (updated) updated.textContent = 'updated ' + new Date().toLocaleTimeString();
         },

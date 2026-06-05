@@ -144,7 +144,9 @@ def health(response: Response):
                     if fs.connected:
                         resp = fs.send('api status')
                         first_line = (resp.data.split('\n')[0] if resp and resp.data else '').strip()
-                        fs_nodes.append({'nodeid': nodeid, 'status': 'up', 'detail': first_line})
+                        cps_match = re.search(r'(\d+) session\(s\) per second(?! (?:max|peak))', first_line)
+                        fs_nodes.append({'nodeid': nodeid, 'status': 'up', 'detail': first_line,
+                                         'cps': int(cps_match.group(1)) if cps_match else None})
                     else:
                         fs_nodes.append({'nodeid': nodeid, 'status': 'down', 'error': 'connection failed'})
                 except Exception as e:
@@ -170,7 +172,8 @@ def health(response: Response):
                     outbound += rdbconn.scard(k)
                 if cursor == 0:
                     break
-            result['active_calls'] = {'inbound': inbound, 'outbound': outbound, 'total': inbound + outbound}
+            cps = sum(n.get('cps') or 0 for n in fs_nodes if n.get('status') == 'up')
+            result['active_calls'] = {'inbound': inbound, 'outbound': outbound, 'total': inbound + outbound, 'cps': cps}
         except Exception as e:
             result['active_calls'] = {'error': str(e)}
 
