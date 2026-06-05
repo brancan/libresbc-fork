@@ -127,7 +127,10 @@
               <div class="col-md-12 py-2">
                 <div class="d-flex align-items-center justify-content-between mb-2">
                   <h6 class="mb-0 text-muted">System Health</h6>
-                  <span class="small text-muted" id="health-updated"></span>
+                  <div class="d-flex align-items-center gap-2">
+                    <span class="small text-muted" id="health-updated"></span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-1" title="Refresh now" onclick="GetHealthStatus()"><i class="fa fa-refresh"></i></button>
+                  </div>
                 </div>
                 <div class="row g-2" id="health-widget">
                   <div class="col-md-3">
