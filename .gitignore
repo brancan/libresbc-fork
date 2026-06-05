@@ -32,3 +32,6 @@ libreui-*
 
 # custom
 *.save
+.windsurf/
+.atl/.skill-registry.cache.json
+webui/libreui
