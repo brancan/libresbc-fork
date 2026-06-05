@@ -26,7 +26,9 @@ local function capacity_handler()
         end
         log.debug('module=callng, space=event:capacity, event_name=channel.create, intcon=%s, direction=%s', intcon, direction)
         if intcon then
-            rdbconn:sadd(concurentcallskey(intcon, direction), uuid)
+            local cckey = concurentcallskey(intcon, direction)
+            rdbconn:sadd(cckey, uuid)
+            rdbconn:expire(cckey, CONCURENTCALLS_TTL)
         else
             local profilename = event:getHeader("variable_sofia_profile_name")
             local sip_network_ip = event:getHeader("variable_sip_network_ip")
@@ -42,9 +44,11 @@ local function capacity_handler()
         local old_uuid = event:getHeader("Old-Unique-ID")
         log.info('module=callng, space=event:capacity, action=capacity_handler, event=channel.uuid, uuid=%s, old_uuid=%s', uuid, old_uuid)
         if intcon and old_uuid then
+            local cckey = concurentcallskey(intcon, direction)
             rdbconn:pipeline(function(p)
-                p:srem(concurentcallskey(intcon, direction), old_uuid)
-                p:sadd(concurentcallskey(intcon, direction), uuid)
+                p:srem(cckey, old_uuid)
+                p:sadd(cckey, uuid)
+                p:expire(cckey, CONCURENTCALLS_TTL)
             end)
         else
             local profilename = event:getHeader("variable_sofia_profile_name")

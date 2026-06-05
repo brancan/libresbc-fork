@@ -43,6 +43,9 @@ EMPTYSTRING = ''
 --- CDR
 CDRTTL = 3600
 
+--- CONCURENT CALLS
+CONCURENTCALLS_TTL = 8*3600  -- orphaned UUIDs expire after 8h if FS is SIGKILL'd
+
 --- SECURITY
 ROLLING_WINDOW_TIME = 1000                             --- use the exactly 1 second = 1000ms
 VIOLATED_BLOCK_TIME = 60*ROLLING_WINDOW_TIME           --- if violate block 60000ms, it can be increase if violate;
