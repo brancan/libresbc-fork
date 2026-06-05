@@ -78,6 +78,11 @@
             role="tab" aria-controls="nav-cdr" aria-selected="false" onclick="loadCDR();">CDR</a>
           </li>
           <li class="nav-item">
+            <a href="" class="nav-link" id="live-calls-tab" data-bs-toggle="tab" data-bs-target="#nav-live-calls"
+            type="button" role="tab" aria-controls="nav-live-calls" aria-selected="false"
+            onclick="LSBC.autoRefresh.start('live-calls', loadActiveChannels, 5000);">Live</a>
+          </li>
+          <li class="nav-item">
             <a href="/apidocs" class="nav-link"  type="button" role="tab"><i class="fa  fa-info-circle"></i></a>
           </li>
         </ul>
@@ -373,6 +378,31 @@
               </div>
             </div>
             <!-- END CDR -->
+
+            <!-- Live Calls -->
+            <div class="tab-pane fade" id="nav-live-calls" role="tabpanel" aria-labelledby="live-calls-tab">
+              <div class="py-1 text-center"><h3>Live Calls</h3></div>
+              <hr>
+              <div class="d-flex align-items-center gap-2 mb-3">
+                <span id="live-calls-count" class="text-muted small"></span>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-sm table-hover table-striped" id="live-calls-table">
+                  <thead class="table-dark">
+                    <tr>
+                      <th>Caller</th>
+                      <th>Destination</th>
+                      <th>Duration</th>
+                      <th>State</th>
+                      <th>Direction</th>
+                      <th class="small text-muted">UUID</th>
+                    </tr>
+                  </thead>
+                  <tbody id="live-calls-body"></tbody>
+                </table>
+              </div>
+            </div>
+            <!-- END Live Calls -->
           </div>
           <!--- PROGRESS BAR -->
           <hr>

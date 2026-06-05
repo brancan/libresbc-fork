@@ -3262,3 +3262,52 @@ def get_cdr_records(response: Response, date: str = Query(None), limit: int = Qu
         logger.error(f"module=liberator, space=libreapi, action=get_cdr_records, requestid={get_request_uuid()}, exception={e}, traceback={traceback.format_exc()}")
 
     return result
+
+
+#-----------------------------------------------------------------------
+# Live Channels
+#-----------------------------------------------------------------------
+
+@librerouter.get("/libreapi/calls/active", status_code=200)
+def get_active_channels(response: Response):
+    requestid = get_request_uuid()
+    try:
+        channels = []
+        members = rdbconn.smembers('cluster:members')
+        for nodeid in members:
+            _socket = rdbconn.hget('DISCOVERY', nodeid)
+            if not _socket:
+                continue
+            socket_data = json.loads(_socket)
+            try:
+                fs = redfs.InboundESL(
+                    host=socket_data.get('ipaddr'),
+                    port=socket_data.get('port'),
+                    password=socket_data.get('password'),
+                    timeout=3
+                )
+                fs.connect()
+                if not fs.connected:
+                    continue
+                resp = fs.send('api show channels as json')
+                if resp and resp.data:
+                    parsed = json.loads(resp.data)
+                    for ch in parsed.get('rows', []):
+                        channels.append({
+                            'uuid':        ch.get('uuid'),
+                            'direction':   ch.get('direction'),
+                            'caller':      ch.get('cid_num'),
+                            'destination': ch.get('dest'),
+                            'duration':    ch.get('duration'),
+                            'callstate':   ch.get('callstate'),
+                            'nodeid':      nodeid,
+                        })
+            except Exception as e:
+                logger.warning(f'module=liberator, space=libreapi, action=get_active_channels:esl, nodeid={nodeid}, exception={e}')
+        response.status_code = 200
+        result = channels
+    except Exception as e:
+        response.status_code = 500
+        result = None
+        logger.error(f'module=liberator, space=libreapi, action=get_active_channels, requestid={requestid}, exception={e}, traceback={traceback.format_exc()}')
+    return result

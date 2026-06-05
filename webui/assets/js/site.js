@@ -1135,6 +1135,9 @@ $('[data-bs-toggle="tab"]').on('hide.bs.tab', function() {
     if (target && target === '#nav-home') {
         LSBC.autoRefresh.stop('health');
     }
+    if (target && target === '#nav-live-calls') {
+        LSBC.autoRefresh.stop('live-calls');
+    }
 });
 
 $(document).on('click', '.lsbc-gw-rescan', function() {
@@ -1242,6 +1245,41 @@ function loadCDR() {
                     '</tr>';
             });
             tbody.innerHTML = rows.join('');
+        },
+        error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
+    });
+}
+
+// --------------------------------------------------
+// Live Channels
+// --------------------------------------------------
+
+function loadActiveChannels() {
+    $.ajax({
+        type: 'GET',
+        url: '/libreapi/calls/active',
+        success: function(data) {
+            var tbody = document.getElementById('live-calls-body');
+            var count = document.getElementById('live-calls-count');
+            if (!Array.isArray(data) || data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No active channels</td></tr>';
+                if (count) count.textContent = '';
+                return;
+            }
+            if (count) count.textContent = data.length + ' channel' + (data.length === 1 ? '' : 's');
+            tbody.innerHTML = data.map(function(ch) {
+                var dur = parseInt(ch.duration) || 0;
+                var durStr = Math.floor(dur / 60) + ':' + String(dur % 60).padStart(2, '0');
+                var stateClass = ch.callstate === 'ACTIVE' ? 'text-success' : 'text-warning';
+                return '<tr>' +
+                    '<td>' + LSBC.escapeAttr(ch.caller || '-') + '</td>' +
+                    '<td>' + LSBC.escapeAttr(ch.destination || '-') + '</td>' +
+                    '<td>' + durStr + '</td>' +
+                    '<td class="' + stateClass + ' small">' + LSBC.escapeAttr(ch.callstate || '-') + '</td>' +
+                    '<td class="small">' + LSBC.escapeAttr(ch.direction || '-') + '</td>' +
+                    '<td class="font-monospace small text-muted">' + LSBC.escapeAttr(ch.uuid || '-') + '</td>' +
+                    '</tr>';
+            }).join('');
         },
         error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
