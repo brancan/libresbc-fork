@@ -1006,7 +1006,9 @@ LSBC.filter = {
 LSBC.editor = {
     _cm: null,
     mount: function(textareaEl) {
+        var pendingValue = textareaEl.value;
         if (this._cm) { this._cm.toTextArea(); this._cm = null; }
+        textareaEl.value = pendingValue;
         if (typeof CodeMirror === 'undefined') return;
         this._cm = CodeMirror.fromTextArea(textareaEl, {
             mode: 'application/json',

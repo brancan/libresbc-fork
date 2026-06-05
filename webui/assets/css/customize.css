@@ -47,7 +47,31 @@ textarea[is="highlighted-code"] { padding: 8px; }
 .lsbc-filter { max-width: 280px; }
 
 #cm-json-error { font-size: 0.8rem; }
-.CodeMirror { height: 420px; border-radius: 4px; }
+#offcanvaspanel .offcanvas-body {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#offcanvaspanel .offcanvas-body > .col-md-12 {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+#offcanvas-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+}
+#offcanvas-content > .col-md-12 {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.CodeMirror { flex: 1; height: auto; min-height: 120px; border-radius: 4px; }
 .lsbc-page-prev, .lsbc-page-next { padding: 0.15rem 0.5rem; }
 .lsbc-refresh-interval { font-size: 0.8rem; }
 
