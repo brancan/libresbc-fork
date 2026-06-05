@@ -255,6 +255,17 @@ def interconnection_status(response: Response):
                 result['outbound'][intcon_name] = {'active_calls': 0}
             result['outbound'][intcon_name]['gateways'] = gw_states
 
+        # enrich with max_calls from capacity class (runs after all intcons are known)
+        for direction in ('inbound', 'outbound'):
+            dir_key = 'in' if direction == 'inbound' else 'out'
+            for intcon_name in result[direction]:
+                try:
+                    capacity_class = rdbconn.hget(f'intcon:{dir_key}:{intcon_name}', 'capacity_class')
+                    raw = rdbconn.hget(f'class:capacity:{capacity_class}', 'concurentcalls') if capacity_class else None
+                    result[direction][intcon_name]['max_calls'] = fieldjsonify(raw) if raw else None
+                except Exception:
+                    result[direction][intcon_name]['max_calls'] = None
+
         response.status_code = 200
     except Exception as e:
         response.status_code = 500

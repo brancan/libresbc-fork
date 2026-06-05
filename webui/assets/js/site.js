@@ -447,7 +447,18 @@ function enrichIntconStatus(presentation, direction) {
                 var cell = document.getElementById('intcon-status-' + name);
                 if (!cell) return;
                 var calls = d.active_calls != null ? d.active_calls : 0;
-                var html = '<span class="badge ' + (calls > 0 ? 'bg-success' : 'bg-secondary') + '">' + calls + ' calls</span>';
+                var maxCalls = d.max_calls;
+                var html;
+                if (maxCalls != null && maxCalls > 0) {
+                    var pct = Math.min(100, Math.round(calls / maxCalls * 100));
+                    var barClass = pct >= 90 ? 'bg-danger' : pct >= 70 ? 'bg-warning' : 'bg-success';
+                    html = '<div class="small">' + calls + '<span class="text-muted">/' + maxCalls + '</span></div>' +
+                        '<div class="progress mt-1" style="height:4px;min-width:60px">' +
+                        '<div class="progress-bar ' + barClass + '" style="width:' + pct + '%"></div>' +
+                        '</div>';
+                } else {
+                    html = '<span class="badge ' + (calls > 0 ? 'bg-success' : 'bg-secondary') + '">' + calls + ' calls</span>';
+                }
                 if (direction === 'outbound' && d.gateways) {
                     html += '<div class="mt-1 d-flex gap-1 flex-wrap align-items-center">';
                     Object.entries(d.gateways).forEach(function(entry) {
