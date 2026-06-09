@@ -41,7 +41,7 @@ ROUTE = 'route'
 HTTPR = 'httpr'
 EMPTYSTRING = ''
 --- CDR
-CDRTTL = 3600
+CDRTTL = 172800  -- 48 hours; reduced from 1h to prevent silent CDR loss on liberator downtime
 
 --- CONCURENT CALLS
 CONCURENTCALLS_TTL = 8*3600  -- orphaned UUIDs expire after 8h if FS is SIGKILL'd
