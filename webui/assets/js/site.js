@@ -1248,6 +1248,7 @@ function loadCDR() {
                 var route = (r.from_intcon || '?') + ' → ' + (r.to_intcon || '?');
                 var hangup = r.hangup_cause || '-';
                 var hangupClass = hangup === 'NORMAL_CLEARING' ? 'text-muted' : 'text-danger fw-bold';
+                var libreHangup = r.libre_hangup_cause || '';
                 return '<tr>' +
                     '<td>' + LSBC.escapeAttr(timeStr) + '</td>' +
                     '<td>' + LSBC.escapeAttr(r.caller_number || '-') + '</td>' +
@@ -1255,6 +1256,7 @@ function loadCDR() {
                     '<td class="text-nowrap small">' + LSBC.escapeAttr(route) + '</td>' +
                     '<td>' + (answered ? durStr : '<span class="text-warning">no answer</span>') + '</td>' +
                     '<td class="' + hangupClass + '">' + LSBC.escapeAttr(hangup) + '</td>' +
+                    '<td class="text-muted small">' + LSBC.escapeAttr(libreHangup) + '</td>' +
                     '</tr>';
             });
             tbody.innerHTML = rows.join('');

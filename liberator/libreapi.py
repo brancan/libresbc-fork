@@ -3263,6 +3263,7 @@ def get_cdr_records(response: Response, date: str = Query(None), limit: int = Qu
                 'to_intcon':   ob.get('intconname'),
                 'gateway':     ob.get('gateway_name'),
                 'hangup_cause': base.get('hangup_cause'),
+                'libre_hangup_cause': base.get('libre_hangup_cause'),
                 'sip_hangup_cause': base.get('sip_hangup_cause'),
             })
 
