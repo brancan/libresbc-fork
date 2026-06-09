@@ -217,7 +217,7 @@ local function main()
             if fieldjsonify(rdbconn:hget(intconkey(NgVars.route, OUTBOUND), 'pai')) then
                 local _sipadip_pai = freeswitch.getGlobalVariable(_sipprofile..':advertising')
                 if not _sipadip_pai then _sipadip_pai = freeswitch.getGlobalVariable('hostname') end
-                InLeg:execute("export", "nolocal:sip_h_P-Asserted-Identity=<sip:"..NgVars._cidnumber.."@".._sipadip_pai..";user=phone>")
+                InLeg:execute("export", "nolocal:sip_h_P-Asserted-Identity=<sip:"..NgVars.cidnumber.."@".._sipadip_pai..";user=phone>")
             end
             --------------------------------------------------------------------
 
