@@ -15,6 +15,11 @@
     <!-- FAVICON ––––––––––––––––––––––––––––––––––––––––––––––––––--------- -->
     <link rel="icon" type="image/png" href="assets/images/favicon.ico">
     <meta name="theme-color" content="#fcba03">
+    <style>
+      #cdr-table thead th[data-cdr-key] { cursor: pointer; user-select: none; white-space: nowrap; }
+      #cdr-table thead th.cdr-sort-asc::after { content: ' ▲'; font-size: 0.7em; opacity: 0.8; }
+      #cdr-table thead th.cdr-sort-desc::after { content: ' ▼'; font-size: 0.7em; opacity: 0.8; }
+    </style>
   </head>
   <body onload="GetPresentNode();">
     <!-- HEADER ––––––––––––––––––––––––––––––––––––––––––––––––––--------- -->
@@ -89,8 +94,8 @@
       </header>
     </div>
     <!-- PAGE ––––––––––––––––––––––––––––––––––––––––––––––––––--------- -->
-    <div class="container mx-auto p-3 py-md-5">
-      <div class="container">
+    <div class="container-fluid px-4 py-md-5">
+      <div class="container-fluid">
         <main>
           <!----- BEGIN: TOAST -->
           <div aria-live="polite" aria-atomic="true" class="d-flex justify-content-center align-items-center w-100">
@@ -364,19 +369,31 @@
                 <input type="date" id="cdr-date-input" class="form-control" style="max-width:180px;">
                 <button type="button" class="btn btn-primary" onclick="loadCDR()"><i class="fa fa-search"></i> Load</button>
                 <span id="cdr-count" class="text-muted small"></span>
-                <input type="text" id="cdr-filter" class="form-control form-control-sm" placeholder="Filter by caller or destination..." style="max-width:260px">
+                <input type="text" id="cdr-filter" class="form-control form-control-sm" placeholder="Search all columns..." style="max-width:260px">
+                <div class="form-check form-check-inline ms-2 mb-0">
+                  <input class="form-check-input" type="checkbox" id="cdr-advanced">
+                  <label class="form-check-label small" for="cdr-advanced">Advanced</label>
+                </div>
               </div>
               <div class="table-responsive">
                 <table class="table table-sm table-hover table-striped" id="cdr-table">
                   <thead class="table-dark">
                     <tr>
-                      <th>Time</th>
-                      <th>Caller</th>
-                      <th>Destination</th>
-                      <th>Route</th>
-                      <th>Duration</th>
-                      <th>Hangup</th>
-                      <th>Libre Cause</th>
+                      <th data-cdr-key="start_time" data-cdr-type="num" data-bs-toggle="tooltip" data-bs-placement="top" title="Hora de inicio de la llamada (INVITE enviado)">Time</th>
+                      <th class="cdr-col-adv d-none" data-cdr-key="caller_name" data-bs-toggle="tooltip" data-bs-placement="top" title="Nombre del llamante tal como lo reporta el SIP (Display Name / CLI name)">Caller Name</th>
+                      <th data-cdr-key="caller_number" data-bs-toggle="tooltip" data-bs-placement="top" title="Número del llamante (ANI / CLI)">Caller</th>
+                      <th data-cdr-key="destination_number" data-bs-toggle="tooltip" data-bs-placement="top" title="Número de destino marcado (DNIS)">Destination</th>
+                      <th data-cdr-key="route" data-bs-toggle="tooltip" data-bs-placement="top" title="Interconnect de entrada → salida. Ejemplo: from-tma → to-issabel">Route</th>
+                      <th data-cdr-key="gateway" data-bs-toggle="tooltip" data-bs-placement="top" title="Gateway SIP de salida usado para enrutar la llamada (ej: tma-brr-1, tma-cuy-1)">Gateway</th>
+                      <th class="cdr-col-adv d-none" data-cdr-key="sipprofile" data-bs-toggle="tooltip" data-bs-placement="top" title="Perfil SIP de LibreSBC por donde ingresó la llamada (ej: tma_udp_profile)">SIP Profile</th>
+                      <th data-cdr-key="ring" data-cdr-type="num" data-bs-toggle="tooltip" data-bs-placement="top" title="Ring time: segundos desde el INVITE hasta que el destino atendió (200 OK). Vacío si no fue atendida">Ring</th>
+                      <th class="cdr-col-adv d-none" data-cdr-key="pdd" data-cdr-type="num" data-bs-toggle="tooltip" data-bs-placement="top" title="Post Dial Delay: segundos desde el INVITE hasta el primer 183/ringing. Mide cuándo empezó a sonar el teléfono remoto">PDD</th>
+                      <th data-cdr-key="duration" data-cdr-type="num" data-bs-toggle="tooltip" data-bs-placement="top" title="Duración de la conversación en mm:ss. Cero si no fue atendida">Duration</th>
+                      <th data-cdr-key="hangup_cause" data-bs-toggle="tooltip" data-bs-placement="top" title="Causa de corte FreeSWITCH. NORMAL_CLEARING = normal. ORIGINATOR_CANCEL = llamante colgó antes de respuesta. NO_ROUTE_DESTINATION = sin ruta">Hangup</th>
+                      <th class="cdr-col-adv d-none" data-cdr-key="hangup_disposition" data-bs-toggle="tooltip" data-bs-placement="top" title="Quién inició el corte: send_bye = este SBC cortó, recv_bye = el otro extremo cortó, recv_cancel = el llamante canceló">Disposition</th>
+                      <th class="cdr-col-adv d-none" data-cdr-key="codec" data-bs-toggle="tooltip" data-bs-placement="top" title="Codec de audio negociado en la llamada (PCMA, PCMU, G729, etc.). Vacío si no fue atendida">Codec</th>
+                      <th class="cdr-col-adv d-none" data-cdr-key="sip_hangup_cause" data-bs-toggle="tooltip" data-bs-placement="top" title="Código SIP de corte: sip:200 = normal, sip:487 = cancelado, sip:486 = ocupado, sip:408 = timeout, sip:503 = no disponible">SIP</th>
+                      <th class="cdr-col-adv d-none" data-cdr-key="libre_hangup_cause" data-bs-toggle="tooltip" data-bs-placement="top" title="Causa de rechazo de LibreSBC antes de rutear (ROUTE_NOT_FOUND, DISABLED_CONNECTION, etc.). Vacío en llamadas que llegaron a rutear normalmente">Libre Cause</th>
                     </tr>
                   </thead>
                   <tbody id="cdr-table-body"></tbody>

@@ -3256,15 +3256,20 @@ def get_cdr_records(response: Response, date: str = Query(None), limit: int = Qu
                 'start_time':  base.get('start_time'),
                 'end_time':    base.get('end_time'),
                 'answer_time': base.get('answer_time'),
+                'progress_time': base.get('progress_time'),
                 'duration':    base.get('duration'),
                 'caller_number':      ib.get('caller_number') or ob.get('caller_number'),
+                'caller_name':        ib.get('caller_name') or ob.get('caller_name'),
                 'destination_number': ib.get('destination_number') or ob.get('destination_number'),
                 'from_intcon': ib.get('intconname'),
                 'to_intcon':   ob.get('intconname'),
                 'gateway':     ob.get('gateway_name'),
+                'sipprofile':  ib.get('sipprofile') or ob.get('sipprofile'),
                 'hangup_cause': base.get('hangup_cause'),
+                'hangup_disposition': base.get('hangup_disposition'),
                 'libre_hangup_cause': base.get('libre_hangup_cause'),
                 'sip_hangup_cause': base.get('sip_hangup_cause'),
+                'codec': ob.get('read_codec') or ib.get('read_codec'),
             })
 
         merged.sort(key=lambda r: int(r.get('end_time') or 0), reverse=True)
