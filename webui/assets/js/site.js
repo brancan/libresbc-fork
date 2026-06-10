@@ -1051,12 +1051,17 @@ LSBC.paginate = {
         var state = this._state[tableId] = { page: 0, size: pageSize };
         var self = this;
         function render() {
-            var rows = $('#' + tableId + ' tbody tr:not([hidden])');
+            $('#' + tableId + ' tbody tr[hidden]').removeAttr('hidden');
+            var rows = $('#' + tableId + ' tbody tr').filter(function() {
+                return $(this).css('display') !== 'none';
+            });
             var total = rows.length;
             var pages = Math.max(1, Math.ceil(total / state.size));
             state.page = Math.min(state.page, pages - 1);
             rows.each(function(i) {
-                $(this).toggle(i >= state.page * state.size && i < (state.page + 1) * state.size);
+                if (!(i >= state.page * state.size && i < (state.page + 1) * state.size)) {
+                    $(this).attr('hidden', '');
+                }
             });
             var footerId = tableId + '-pagination';
             var footer = document.getElementById(footerId);
@@ -1229,7 +1234,7 @@ function loadCDR() {
     var date = input ? input.value : new Date().toISOString().slice(0, 10);
     $.ajax({
         type: 'GET',
-        url: '/libreapi/cdr/records?date=' + encodeURIComponent(date) + '&limit=500',
+        url: '/libreapi/cdr/records?date=' + encodeURIComponent(date) + '&limit=2000',
         success: function(data) {
             var tbody = document.getElementById('cdr-table-body');
             var count = document.getElementById('cdr-count');
@@ -1260,6 +1265,12 @@ function loadCDR() {
                     '</tr>';
             });
             tbody.innerHTML = rows.join('');
+            $('#cdr-filter').val('');
+            if (!LSBC._cdrFilterAttached) {
+                LSBC.filter.attach('#cdr-filter', 'cdr-table');
+                LSBC._cdrFilterAttached = true;
+            }
+            LSBC.paginate.attach('cdr-table', 100);
         },
         error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
