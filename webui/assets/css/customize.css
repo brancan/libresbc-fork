@@ -22,7 +22,7 @@
     max-width: 600px;
 }
 
-/* Estilos para mensajes de error en el toast */
+/* Toast error message styling */
 .toast .toast-body {
     font-size: 0.9rem;
     line-height: 1.4;
@@ -44,7 +44,7 @@
     font-size: 0.85rem;
 }
 
-/* Toast de advertencia con mejor legibilidad */
+/* Warning toast with improved readability */
 .toast.bg-warning .toast-body {
     color: #000 !important;
 }

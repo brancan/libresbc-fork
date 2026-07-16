@@ -460,15 +460,7 @@ function GeneralRemove(name, SettingName){
             GeneralGetPresent(SettingName);
         },
         error: function (jqXHR, textStatus, errorThrown) {
-            console.log(jqXHR);
-            
-            // Mostrar el modal de errores si hay respuesta JSON
-            if (jqXHR.responseJSON) {
-                ShowErrorModal(jqXHR.responseJSON);
-            } else {
-                // Fallback al toast si no hay respuesta JSON
-                ShowToast('Error de conexión: ' + textStatus, 'danger');
-            }
+            ShowAPIError(jqXHR, textStatus, errorThrown);
         }
     });
 }
@@ -944,15 +936,14 @@ function ShowToast(message, msgtype='danger'){
         ToastMsgEMLS.classList.remove('bg-success');
     }
     
-    // Configurar duración del toast según el tipo de mensaje
-    let delay = 3500; // 3.5 segundos por defecto
+    // Toast duration scales with message type
+    let delay = 3500; // default 3.5s
     if (msgtype === 'warning') {
-        delay = 8000; // 8 segundos para errores de validación
+        delay = 8000; // 8s for validation errors
     } else if (msgtype === 'danger') {
-        delay = 6000; // 6 segundos para errores críticos
+        delay = 6000; // 6s for critical errors
     }
-    
-    // Configurar el delay del toast
+
     ToastMsgEMLS.setAttribute('data-bs-delay', delay);
     
     document.getElementById('event-message').innerHTML = message;
@@ -1013,65 +1004,63 @@ function loadCDR() {
     });
 }
 
-// Función mejorada para mostrar errores de la API
+// Parses common API error shapes and renders them as a structured toast
 function ShowAPIError(jqXHR, textStatus, errorThrown) {
     console.log(jqXHR);
-    
+
     let errorMessage = '';
     let msgType = 'danger';
-    
+
     if (jqXHR.responseJSON) {
         const error = jqXHR.responseJSON;
-        
+
         if (error.detail && Array.isArray(error.detail)) {
-            // Error de validación de Pydantic
+            // Pydantic validation error
             msgType = 'warning';
-            errorMessage = '<strong>🚨 Errores de Validación:</strong><br>';
-            
+            errorMessage = '<strong>🚨 Validation Errors:</strong><br>';
+
             error.detail.forEach((err, index) => {
-                let fieldName = err.loc && err.loc.length > 1 ? err.loc[1] : 'Campo';
-                let errorMsg = err.msg || 'Error de validación';
-                let inputValue = err.input ? ` (Valor: <code>${err.input}</code>)` : '';
-                let expectedValues = err.ctx && err.ctx.expected ? `<br><small>💡 Valores permitidos: ${err.ctx.expected}</small>` : '';
-                
+                let fieldName = err.loc && err.loc.length > 1 ? err.loc[1] : 'Field';
+                let errorMsg = err.msg || 'Validation error';
+                let inputValue = err.input ? ` (Value: <code>${err.input}</code>)` : '';
+                let expectedValues = err.ctx && err.ctx.expected ? `<br><small>💡 Allowed values: ${err.ctx.expected}</small>` : '';
+
                 errorMessage += `• <strong>${fieldName}:</strong> ${errorMsg}${inputValue}${expectedValues}<br>`;
             });
-            
-            // Agregar sugerencia de ayuda
-            errorMessage += '<br><small>💡 Revisa los valores ingresados y asegúrate de que cumplan con el formato requerido.</small>';
+
+            errorMessage += '<br><small>💡 Check the values entered and make sure they match the required format.</small>';
         } else if (error.error) {
             errorMessage = `<strong>❌ Error:</strong> ${error.error}`;
         } else if (error.message) {
             errorMessage = `<strong>❌ Error:</strong> ${error.message}`;
         } else {
-            errorMessage = '❌ Ha ocurrido un error inesperado';
+            errorMessage = '❌ An unexpected error occurred';
         }
-        
-        // Agregar código de estado si está disponible
+
         if (jqXHR.status) {
             let statusText = '';
             switch(jqXHR.status) {
-                case 400: statusText = 'Solicitud Incorrecta'; break;
-                case 401: statusText = 'No Autorizado'; break;
-                case 403: statusText = 'Prohibido'; break;
-                case 404: statusText = 'No Encontrado'; break;
-                case 422: statusText = 'Entidad No Procesable'; break;
-                case 500: statusText = 'Error del Servidor'; break;
+                case 400: statusText = 'Bad Request'; break;
+                case 401: statusText = 'Unauthorized'; break;
+                case 403: statusText = 'Forbidden'; break;
+                case 404: statusText = 'Not Found'; break;
+                case 422: statusText = 'Unprocessable Entity'; break;
+                case 500: statusText = 'Server Error'; break;
                 default: statusText = 'Error';
             }
-            errorMessage += `<br><small>📊 Código: ${jqXHR.status} (${statusText})</small>`;
+            errorMessage += `<br><small>📊 Status: ${jqXHR.status} (${statusText})</small>`;
         }
     } else {
-        // Error de conexión
+        // Connection error
         msgType = 'danger';
-        errorMessage = `🌐 Error de conexión: ${textStatus}`;
-        
+        errorMessage = `🌐 Connection error: ${textStatus}`;
+
         if (textStatus === 'timeout') {
-            errorMessage = '⏰ Tiempo de espera agotado. Verifica tu conexión a internet.';
+            errorMessage = '⏰ Request timed out. Check your network connection.';
         } else if (textStatus === 'error') {
-            errorMessage = '🔌 Error de conexión. Verifica que el servidor esté disponible.';
+            errorMessage = '🔌 Connection error. Verify the server is reachable.';
         }
     }
-    
+
     ShowToast(errorMessage, msgType);
 }
