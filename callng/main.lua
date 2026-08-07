@@ -136,6 +136,11 @@ local function main()
             local _concurentcalls, _max_concurentcalls =  verify_concurentcalls(NgVars.route, OUTBOUND, _uuid)
             log.info('module=callng, space=main, action=concurency_check, seshid=%s, uuid=%s, route=%s, concurentcalls=%s, max_concurentcalls=%s', NgVars.seshid, _uuid, NgVars.route, _concurentcalls, _max_concurentcalls)
             if _concurentcalls >= _max_concurentcalls then
+                -- verify_concurentcalls() already SADD'd _uuid for this route; since this
+                -- attempt is discarded before the real OutLeg is created, CHANNEL_DESTROY
+                -- will never fire for it. Without this srem the uuid leaks forever — a
+                -- deterministic leak, one per rejected failover attempt, not a race.
+                rdbconn:srem(concurentcallskey(NgVars.route, OUTBOUND), _uuid)
                 if attempt >= #routes then HANGUP_CAUSE = 'CALL_REJECTED'; NgVars.LIBRE_HANGUP_CAUSE = 'MAX_CONCURENT_CALL' end; goto ENDFAILOVER
             end
 
@@ -143,6 +148,8 @@ local function main()
             local waitms, queue, max_cps = average_cps(NgVars.route, OUTBOUND)
             log.info('module=callng, space=main, action=average_cps, seshid=%s, uuid=%s, route=%s, waitms=%s, queue=%s, max_cps=%s', NgVars.seshid, _uuid, NgVars.route, waitms, queue, max_cps)
             if queue >  max_cps then
+                -- same leak as above: this route's reserved _uuid will never get an OutLeg.
+                rdbconn:srem(concurentcallskey(NgVars.route, OUTBOUND), _uuid)
                 HANGUP_CAUSE = 'CALL_REJECTED'; NgVars.LIBRE_HANGUP_CAUSE = 'MAX_QUEUE'; goto ENDFAILOVER
             else InLeg:sleep(waitms) end
 
