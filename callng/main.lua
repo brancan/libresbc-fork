@@ -122,6 +122,18 @@ local function main()
         local _uuid, dialstatus, nshcause
         local routes = tosets(NgVars.routes)
         if navigator then table.insert(routes, 1, navigator) end
+        -- Routing tables may configure an empty "secondary" ("") to mean "no
+        -- failover route" instead of omitting the field. is_intcon_enable('')
+        -- on that placeholder always fails, so the loop below would try it as
+        -- a real attempt and mislabel a legitimate primary-route failure
+        -- (e.g. NO_USER_RESPONSE) as CHANNEL_UNACCEPTABLE/DISABLED_CONNECTION
+        -- instead of surfacing the real SIP cause. Drop blank/nil entries.
+        for i = #routes, 1, -1 do
+            if not routes[i] or routes[i] == '' then table.remove(routes, i) end
+        end
+        if #routes == 0 then
+            HANGUP_CAUSE = 'NO_ROUTE_DESTINATION'; NgVars.LIBRE_HANGUP_CAUSE = 'ROUTE_NOT_FOUND'; goto ENDSESSION
+        end
         for attempt=1, #routes do
             _uuid = fsapi:execute('create_uuid')
             NgVars.route = routes[attempt]
