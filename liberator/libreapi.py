@@ -181,6 +181,123 @@ def health(response: Response):
     return result
 
 
+@librerouter.get("/libreapi/interconnection/status", status_code=200)
+def interconnection_status(response: Response):
+    requestid = get_request_uuid()
+    try:
+        result = {'inbound': {}, 'outbound': {}}
+
+        # active calls per intcon from realtime Redis keys
+        for direction in ('inbound', 'outbound'):
+            cursor = 0
+            while True:
+                cursor, keys = rdbconn.scan(cursor, f'realtime:concurentcalls:{direction}:*', 100)
+                for key in keys:
+                    parts = key.split(':')
+                    # format: realtime:concurentcalls:{direction}:{intcon}:{nodeid}
+                    if len(parts) >= 5:
+                        intcon = parts[3]
+                        if intcon not in result[direction]:
+                            result[direction][intcon] = {'active_calls': 0}
+                        result[direction][intcon]['active_calls'] += rdbconn.scard(key)
+                if cursor == 0:
+                    break
+
+        # gateway registration status via ESL (outbound only)
+        cursor = 0
+        outbound_intcons = set()
+        while True:
+            cursor, keys = rdbconn.scan(cursor, 'intcon:out:*', 100)
+            for key in keys:
+                if not key.endswith(':_gateways'):
+                    parts = key.split(':')
+                    if len(parts) == 3:
+                        outbound_intcons.add(parts[2])
+            if cursor == 0:
+                break
+
+        members = rdbconn.smembers('cluster:members')
+        for intcon_name in outbound_intcons:
+            gw_names = list(rdbconn.hgetall(f'intcon:out:{intcon_name}:_gateways').keys())
+            if not gw_names:
+                continue
+            gw_states = {}
+            for nodeid in members:
+                _socket = rdbconn.hget('DISCOVERY', nodeid)
+                if not _socket:
+                    continue
+                socket_data = json.loads(_socket)
+                try:
+                    with redfs.InboundESL(host=socket_data.get('ipaddr'), port=socket_data.get('port'),
+                                          password=socket_data.get('password'), timeout=3) as fs:
+                        for gw in gw_names:
+                            if gw in gw_states:
+                                continue
+                            resp = fs.send(f'api sofia status gateway {gw}')
+                            state = 'UNKNOWN'
+                            if resp and resp.data:
+                                for line in resp.data.split('\n'):
+                                    if line.strip().startswith('State'):
+                                        state = line.split()[-1].strip()
+                                        break
+                            gw_states[gw] = state
+                except Exception as e:
+                    logger.warning(f'module=liberator, space=libreapi, action=interconnection_status:esl, intcon={intcon_name}, nodeid={nodeid}, exception={e}')
+
+            if intcon_name not in result['outbound']:
+                result['outbound'][intcon_name] = {'active_calls': 0}
+            result['outbound'][intcon_name]['gateways'] = gw_states
+
+        # enrich with max_calls from capacity class (runs after all intcons are known)
+        for direction in ('inbound', 'outbound'):
+            dir_key = 'in' if direction == 'inbound' else 'out'
+            for intcon_name in result[direction]:
+                try:
+                    capacity_class = rdbconn.hget(f'intcon:{dir_key}:{intcon_name}', 'capacity_class')
+                    raw = rdbconn.hget(f'class:capacity:{capacity_class}', 'concurentcalls') if capacity_class else None
+                    result[direction][intcon_name]['max_calls'] = fieldjsonify(raw) if raw else None
+                except Exception:
+                    result[direction][intcon_name]['max_calls'] = None
+
+        response.status_code = 200
+    except Exception as e:
+        response.status_code = 500
+        logger.error(f'module=liberator, space=libreapi, action=interconnection_status, requestid={requestid}, exception={e}, traceback={traceback.format_exc()}')
+        result = None
+    return result
+
+
+@librerouter.post("/libreapi/interconnection/{name}/rescan", status_code=200)
+def rescan_interconnection_gateways(name: str, response: Response):
+    requestid = get_request_uuid()
+    result = {'name': name, 'nodes': {}}
+    try:
+        sipprofile = rdbconn.hget(f'intcon:out:{name}', 'sipprofile')
+        if not sipprofile:
+            response.status_code = 404
+            return {'error': f'outbound interconnection {name} not found'}
+        members = rdbconn.smembers('cluster:members')
+        for nodeid in members:
+            _socket = rdbconn.hget('DISCOVERY', nodeid)
+            if not _socket:
+                continue
+            socket_data = json.loads(_socket)
+            try:
+                with redfs.InboundESL(host=socket_data.get('ipaddr'), port=socket_data.get('port'),
+                                      password=socket_data.get('password'), timeout=3) as fs:
+                    fs.send(f'api sofia profile {sipprofile} rescan')
+                result['nodes'][nodeid] = 'ok'
+            except Exception as e:
+                result['nodes'][nodeid] = str(e)
+                logger.warning(f'module=liberator, space=libreapi, action=rescan_gateways:esl, name={name}, nodeid={nodeid}, exception={e}')
+        response.status_code = 200
+    except Exception as e:
+        response.status_code = 500
+        logger.error(f'module=liberator, space=libreapi, action=rescan_gateways, name={name}, requestid={requestid}, exception={e}')
+        result = {'error': str(e)}
+    return result
+
+
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # CLUSTER & NODE
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
