@@ -13,6 +13,7 @@ import json
 import time
 import os
 import redis
+import redfs
 import validators
 from pydantic import model_validator, StringConstraints, BaseModel, Field
 from pydantic.json_schema import SkipJsonSchema
@@ -94,6 +95,91 @@ def predefine():
         'members': rdbconn.smembers('cluster:members'),
         'codecs': SWCODECS,
     }
+
+
+@librerouter.get("/libreapi/health", status_code=200)
+def health(response: Response):
+    requestid = get_request_uuid()
+    try:
+        result = {}
+
+        # redis
+        try:
+            t0 = time.monotonic()
+            rdbconn.ping()
+            latency_ms = round((time.monotonic() - t0) * 1000, 2)
+            info = rdbconn.info('all')
+            result['redis'] = {
+                'status': 'up',
+                'latency_ms': latency_ms,
+                'version': info.get('redis_version'),
+                'uptime_s': info.get('uptime_in_seconds'),
+                'used_memory_human': info.get('used_memory_human'),
+                'connected_clients': info.get('connected_clients'),
+            }
+        except Exception as e:
+            result['redis'] = {'status': 'down', 'error': str(e)}
+
+        # liberator
+        result['liberator'] = {'status': 'up', 'version': _SWVERSION}
+
+        # freeswitch per cluster node
+        fs_nodes = []
+        try:
+            members = rdbconn.smembers('cluster:members')
+            for nodeid in members:
+                _socket = rdbconn.hget('DISCOVERY', nodeid)
+                if not _socket:
+                    fs_nodes.append({'nodeid': nodeid, 'status': 'unknown', 'error': 'no discovery data'})
+                    continue
+                socket_data = json.loads(_socket)
+                try:
+                    with redfs.InboundESL(
+                        host=socket_data.get('ipaddr'),
+                        port=socket_data.get('port'),
+                        password=socket_data.get('password'),
+                        timeout=3
+                    ) as fs:
+                        resp = fs.send('api status')
+                        first_line = (resp.data.split('\n')[0] if resp and resp.data else '').strip()
+                        cps_match = re.search(r'(\d+) session\(s\) per second(?! (?:max|peak))', first_line)
+                        fs_nodes.append({'nodeid': nodeid, 'status': 'up', 'detail': first_line,
+                                         'cps': int(cps_match.group(1)) if cps_match else None})
+                except Exception as e:
+                    fs_nodes.append({'nodeid': nodeid, 'status': 'down', 'error': str(e)})
+        except Exception as e:
+            logger.error(f'module=liberator, space=libreapi, action=health:freeswitch, requestid={requestid}, exception={e}')
+        result['freeswitch'] = fs_nodes
+
+        # active calls (sum SCARD on all realtime:concurentcalls keys)
+        try:
+            inbound = outbound = 0
+            cursor = 0
+            while True:
+                cursor, keys = rdbconn.scan(cursor, 'realtime:concurentcalls:inbound:*', 100)
+                for k in keys:
+                    inbound += rdbconn.scard(k)
+                if cursor == 0:
+                    break
+            cursor = 0
+            while True:
+                cursor, keys = rdbconn.scan(cursor, 'realtime:concurentcalls:outbound:*', 100)
+                for k in keys:
+                    outbound += rdbconn.scard(k)
+                if cursor == 0:
+                    break
+            cps = sum(n.get('cps') or 0 for n in fs_nodes if n.get('status') == 'up')
+            result['active_calls'] = {'inbound': inbound, 'outbound': outbound, 'total': inbound + outbound, 'cps': cps}
+        except Exception as e:
+            result['active_calls'] = {'error': str(e)}
+
+        response.status_code = 200
+    except Exception as e:
+        response.status_code = 500
+        logger.error(f'module=liberator, space=libreapi, action=health, requestid={requestid}, exception={e}, traceback={traceback.format_exc()}')
+        result = None
+    return result
+
 
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # CLUSTER & NODE
