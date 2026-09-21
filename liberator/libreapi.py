@@ -22,6 +22,7 @@ from typing_extensions import Annotated
 from enum import Enum
 from ipaddress import IPv4Address, IPv4Network, IPv6Address, IPv6Network, ip_network as IPvNetwork
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Response, Path, Query
 from fastapi.encoders import jsonable_encoder
 from configuration import (_APPLICATION, _SWVERSION, _DESCRIPTION, CHANGE_CFG_CHANNEL, SECURITY_CHANNEL,
@@ -3200,13 +3201,37 @@ def delete_routing_record(response: Response, value:str=Path(..., regex=_DIAL_),
 # CDR
 #-----------------------------------------------------------------------
 
+CDR_TZ = ZoneInfo('America/Argentina/Buenos_Aires')
+
+
+def _cdr_time_param_to_epoch(value, date):
+    # accepts 'HH:MM' (interpreted on `date` in CDR_TZ) or a raw epoch integer string
+    value = value.strip()
+    if value.isdigit():
+        return int(value)
+    hh, mm = value.split(':')
+    dt = datetime.strptime(date, '%Y-%m-%d').replace(hour=int(hh), minute=int(mm), tzinfo=CDR_TZ)
+    return int(dt.timestamp())
+
+
 @librerouter.get("/libreapi/cdr/records", status_code=200)
-def get_cdr_records(response: Response, date: str = Query(None), limit: int = Query(200, ge=1, le=2000)):
+def get_cdr_records(response: Response, date: str = Query(None), number: str = Query(None),
+                     from_time: str = Query(None), to_time: str = Query(None),
+                     offset: int = Query(0, ge=0), limit: int = Query(200, ge=1, le=2000)):
     try:
         if date is None:
             date = datetime.now(timezone.utc).strftime('%Y-%m-%d')
         else:
-            datetime.strptime(date, '%Y-%m-%d')
+            try:
+                datetime.strptime(date, '%Y-%m-%d')
+            except ValueError:
+                raise ValueError('Invalid date format, use YYYY-MM-DD')
+
+        try:
+            from_epoch = _cdr_time_param_to_epoch(from_time, date) if from_time else None
+            to_epoch = _cdr_time_param_to_epoch(to_time, date) if to_time else None
+        except ValueError:
+            raise ValueError('Invalid from_time/to_time format, use HH:MM or epoch seconds')
 
         cdr_file = os.path.join(LOGDIR, 'cdr', f'{date}.cdr.nice.json')
         legs = []
@@ -3244,22 +3269,37 @@ def get_cdr_records(response: Response, date: str = Query(None), limit: int = Qu
                 'start_time':  base.get('start_time'),
                 'end_time':    base.get('end_time'),
                 'answer_time': base.get('answer_time'),
+                'progress_time': base.get('progress_time'),
                 'duration':    base.get('duration'),
                 'caller_number':      ib.get('caller_number') or ob.get('caller_number'),
+                'caller_name':        ib.get('caller_name') or ob.get('caller_name'),
                 'destination_number': ib.get('destination_number') or ob.get('destination_number'),
                 'from_intcon': ib.get('intconname'),
                 'to_intcon':   ob.get('intconname'),
                 'gateway':     ob.get('gateway_name'),
+                'sipprofile':  ib.get('sipprofile') or ob.get('sipprofile'),
                 'hangup_cause': base.get('hangup_cause'),
+                'hangup_disposition': base.get('hangup_disposition'),
                 'libre_hangup_cause': base.get('libre_hangup_cause'),
                 'sip_hangup_cause': base.get('sip_hangup_cause'),
+                'codec': ob.get('read_codec') or ib.get('read_codec'),
             })
 
+        if number:
+            merged = [r for r in merged
+                      if number in (r.get('caller_number') or '') or number in (r.get('destination_number') or '')]
+        if from_epoch is not None:
+            merged = [r for r in merged if int(r.get('start_time') or 0) >= from_epoch]
+        if to_epoch is not None:
+            merged = [r for r in merged if int(r.get('start_time') or 0) <= to_epoch]
+
         merged.sort(key=lambda r: int(r.get('end_time') or 0), reverse=True)
-        result = merged[:limit]
+        total = len(merged)
+        response.headers["X-Total-Count"] = str(total)
+        result = merged[offset:offset + limit]
         response.status_code = 200
-    except ValueError:
-        response.status_code, result = 400, {'error': 'Invalid date format, use YYYY-MM-DD'}
+    except ValueError as e:
+        response.status_code, result = 400, {'error': str(e)}
     except Exception as e:
         response.status_code, result = 500, None
         logger.error(f"module=liberator, space=libreapi, action=get_cdr_records, requestid={get_request_uuid()}, exception={e}, traceback={traceback.format_exc()}")
