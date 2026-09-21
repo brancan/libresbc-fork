@@ -29,7 +29,9 @@ local function main()
         local sipprofile = InLeg:getVariable("sofia_profile_name")
         local network_ip = InLeg:getVariable("sip_network_ip")
         NgVars.realm = InLeg:getVariable("domain_name")
-        NgVars.intconname = InLeg:getVariable("user_name")
+        -- Try to determine the inbound connection by SIP profile + source IP first;
+        -- fall back to the FreeSWITCH-provided user_name if no match in Redis.
+        NgVars.intconname = determine_inbound_connection(network_ip, sipprofile) or InLeg:getVariable("user_name")
         NgVars.hostto = InLeg:getVariable("sip_to_host")
         NgVars.hostfr = InLeg:getVariable("sip_from_host")
         NgVars.hostrq = InLeg:getVariable("sip_request_host")
