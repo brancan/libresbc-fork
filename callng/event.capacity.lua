@@ -47,9 +47,11 @@ local function capacity_handler()
         local old_uuid = event:getHeader("Old-Unique-ID")
         log.info('module=callng, space=event:capacity, action=capacity_handler, event=channel.uuid, uuid=%s, old_uuid=%s', uuid, old_uuid)
         if intcon and old_uuid then
+            local cckey = concurentcallskey(intcon, direction)
             rdbconn:pipeline(function(p)
-                p:srem(concurentcallskey(intcon, direction), old_uuid)
-                p:sadd(concurentcallskey(intcon, direction), uuid)
+                p:srem(cckey, old_uuid)
+                p:sadd(cckey, uuid)
+                p:expire(cckey, CONCURENTCALLS_TTL)
             end)
         else
             local profilename = event:getHeader("variable_sofia_profile_name")

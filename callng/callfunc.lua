@@ -130,6 +130,10 @@ function verify_concurentcalls(name, direction, uuid)
         end
     end)
 
+    if direction == INBOUND then
+        rdbconn:expire('realtime:concurentcalls:inbound:'..name..':'..NODEID, CONCURENTCALLS_TTL)
+    end
+
     local startpoint = ((direction == INBOUND) and 2) or 1
     local concurentcalls = 0
     for i=startpoint, #replies do
