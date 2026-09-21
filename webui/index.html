@@ -272,9 +272,12 @@
             <div class="tab-pane fade" id="nav-cdr" role="tabpanel" aria-labelledby="cdr-tab">
               <div class="py-1 text-center"><h3>CDR</h3></div>
               <hr>
-              <div class="d-flex align-items-center gap-2 mb-3">
+              <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
                 <input type="date" id="cdr-date-input" class="form-control" style="max-width:180px;">
-                <button type="button" class="btn btn-primary" onclick="loadCDR()"><i class="fa fa-search"></i> Load</button>
+                <input type="text" id="cdr-search-input" class="form-control" style="max-width:220px;" placeholder="Search caller/destination…">
+                <button type="button" class="btn btn-primary" onclick="cdrLoadFresh()"><i class="fa fa-search"></i> Load</button>
+                <button type="button" class="btn btn-outline-secondary" id="cdr-prev-btn" onclick="cdrPrevPage()"><i class="fa fa-chevron-left"></i> Prev</button>
+                <button type="button" class="btn btn-outline-secondary" id="cdr-next-btn" onclick="cdrNextPage()">Next <i class="fa fa-chevron-right"></i></button>
                 <span id="cdr-count" class="text-muted small"></span>
               </div>
               <div class="table-responsive">

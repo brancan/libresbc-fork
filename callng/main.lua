@@ -29,7 +29,9 @@ local function main()
         local sipprofile = InLeg:getVariable("sofia_profile_name")
         local network_ip = InLeg:getVariable("sip_network_ip")
         NgVars.realm = InLeg:getVariable("domain_name")
-        NgVars.intconname = InLeg:getVariable("user_name")
+        -- Try to determine the inbound connection by SIP profile + source IP first;
+        -- fall back to the FreeSWITCH-provided user_name if no match in Redis.
+        NgVars.intconname = determine_inbound_connection(network_ip, sipprofile) or InLeg:getVariable("user_name")
         NgVars.hostto = InLeg:getVariable("sip_to_host")
         NgVars.hostfr = InLeg:getVariable("sip_from_host")
         NgVars.hostrq = InLeg:getVariable("sip_request_host")
@@ -95,7 +97,13 @@ local function main()
 
         -- routing
         local routingrules, navigator
+        -- Allow operators to set a default routing table via env var so that calls
+        -- that do not declare an explicit x-routing-plan still get routed.
+        -- We read it from the process env (inherited from libre.env via systemd
+        -- EnvironmentFile + Popen of FreeSWITCH from liberator). It is NOT a
+        -- FreeSWITCH global var, so freeswitch.getGlobalVariable() would return nil.
         local routingname = InLeg:getVariable("x-routing-plan")
+                            or os.getenv("LIBRE_DEFAULT_ROUTING_TABLE")
         navigator, NgVars.routes, routingrules = routing_query(routingname, NgVars)
 
         local routingrulestr = 'no.matching.route.found'
@@ -122,6 +130,18 @@ local function main()
         local _uuid, dialstatus, nshcause
         local routes = tosets(NgVars.routes)
         if navigator then table.insert(routes, 1, navigator) end
+        -- Routing tables may configure an empty "secondary" ("") to mean "no
+        -- failover route" instead of omitting the field. is_intcon_enable('')
+        -- on that placeholder always fails, so the loop below would try it as
+        -- a real attempt and mislabel a legitimate primary-route failure
+        -- (e.g. NO_USER_RESPONSE) as CHANNEL_UNACCEPTABLE/DISABLED_CONNECTION
+        -- instead of surfacing the real SIP cause. Drop blank/nil entries.
+        for i = #routes, 1, -1 do
+            if not routes[i] or routes[i] == '' then table.remove(routes, i) end
+        end
+        if #routes == 0 then
+            HANGUP_CAUSE = 'NO_ROUTE_DESTINATION'; NgVars.LIBRE_HANGUP_CAUSE = 'ROUTE_NOT_FOUND'; goto ENDSESSION
+        end
         for attempt=1, #routes do
             _uuid = fsapi:execute('create_uuid')
             NgVars.route = routes[attempt]
@@ -136,6 +156,11 @@ local function main()
             local _concurentcalls, _max_concurentcalls =  verify_concurentcalls(NgVars.route, OUTBOUND, _uuid)
             log.info('module=callng, space=main, action=concurency_check, seshid=%s, uuid=%s, route=%s, concurentcalls=%s, max_concurentcalls=%s', NgVars.seshid, _uuid, NgVars.route, _concurentcalls, _max_concurentcalls)
             if _concurentcalls >= _max_concurentcalls then
+                -- verify_concurentcalls() already SADD'd _uuid for this route; since this
+                -- attempt is discarded before the real OutLeg is created, CHANNEL_DESTROY
+                -- will never fire for it. Without this srem the uuid leaks forever — a
+                -- deterministic leak, one per rejected failover attempt, not a race.
+                rdbconn:srem(concurentcallskey(NgVars.route, OUTBOUND), _uuid)
                 if attempt >= #routes then HANGUP_CAUSE = 'CALL_REJECTED'; NgVars.LIBRE_HANGUP_CAUSE = 'MAX_CONCURENT_CALL' end; goto ENDFAILOVER
             end
 
@@ -143,6 +168,8 @@ local function main()
             local waitms, queue, max_cps = average_cps(NgVars.route, OUTBOUND)
             log.info('module=callng, space=main, action=average_cps, seshid=%s, uuid=%s, route=%s, waitms=%s, queue=%s, max_cps=%s', NgVars.seshid, _uuid, NgVars.route, waitms, queue, max_cps)
             if queue >  max_cps then
+                -- same leak as above: this route's reserved _uuid will never get an OutLeg.
+                rdbconn:srem(concurentcallskey(NgVars.route, OUTBOUND), _uuid)
                 HANGUP_CAUSE = 'CALL_REJECTED'; NgVars.LIBRE_HANGUP_CAUSE = 'MAX_QUEUE'; goto ENDFAILOVER
             else InLeg:sleep(waitms) end
 
