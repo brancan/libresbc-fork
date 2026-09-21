@@ -97,7 +97,13 @@ local function main()
 
         -- routing
         local routingrules, navigator
+        -- Allow operators to set a default routing table via env var so that calls
+        -- that do not declare an explicit x-routing-plan still get routed.
+        -- We read it from the process env (inherited from libre.env via systemd
+        -- EnvironmentFile + Popen of FreeSWITCH from liberator). It is NOT a
+        -- FreeSWITCH global var, so freeswitch.getGlobalVariable() would return nil.
         local routingname = InLeg:getVariable("x-routing-plan")
+                            or os.getenv("LIBRE_DEFAULT_ROUTING_TABLE")
         navigator, NgVars.routes, routingrules = routing_query(routingname, NgVars)
 
         local routingrulestr = 'no.matching.route.found'
