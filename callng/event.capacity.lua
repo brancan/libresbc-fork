@@ -18,6 +18,13 @@ local function capacity_handler()
     local intcon = nil
 
     -- CHANNEL OCCUPIED EVENT
+    -- NOTE: the SADD used to happen here too, but verify_concurentcalls() already
+    -- does it synchronously in main.lua before this async hook can even fire.
+    -- Having two writers of the same SADD with no ordering guarantee against the
+    -- CHANNEL_DESTROY SREM caused orphaned entries whenever this hook's execution
+    -- was scheduled after CHANNEL_DESTROY's for the same uuid — most likely on
+    -- very short-lived calls (e.g. calls rejected by capacity, whose
+    -- create->reject->destroy cycle takes milliseconds). Keep the log only.
     if event_name == 'CHANNEL_CREATE' then
         if direction == INBOUND then
             intcon = event:getHeader("variable_user_name")
@@ -25,9 +32,7 @@ local function capacity_handler()
             intcon = event:getHeader("variable_X-LIBRE-INTCONNAME")
         end
         log.debug('module=callng, space=event:capacity, event_name=channel.create, intcon=%s, direction=%s', intcon, direction)
-        if intcon then
-            rdbconn:sadd(concurentcallskey(intcon, direction), uuid)
-        else
+        if not intcon then
             local profilename = event:getHeader("variable_sofia_profile_name")
             local sip_network_ip = event:getHeader("variable_sip_network_ip")
             local sip_req_host = event:getHeader("variable_sip_req_host")
