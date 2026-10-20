@@ -20,7 +20,9 @@ from ipaddress import ip_address as IPvAddress, ip_network as IPvNetwork
 from configuration import (CHANGE_CFG_CHANNEL, PERNODE_CHANNEL, SECURITY_CHANNEL, FIREWALL_NFTCMD_CHANNEL,
     REDIS_HOST, REDIS_PORT, REDIS_DB, REDIS_PASSWORD, REDIS_TIMEOUT,
     LIBRE_BUILTIN_FIREWALL, LIBRE_CONTAINERIZED, LIBRE_BUILTIN_REDIS, LIBRE_STANDALONE_MODEL,
+    HTTP_API_LISTEN_IP, HTTP_API_LISTEN_PORT,
 )
+from urllib.request import urlopen
 from utilities import logger, threaded, fieldjsonify, stringify, bdecode
 
 
@@ -176,6 +178,23 @@ def nftsets(setname, ops, srcips, bantime=None):
 # B2BUA CONTROL
 #-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
 _FSXML = Environment(loader=FileSystemLoader('fscfg'))
+def waitliberatorapi(timeout=120, interval=2):
+    # freeswitch.xml fetches acl/directory/sip-setting from the liberator api at load time,
+    # so freeswitch must not start before the api answers or it boots with empty config
+    host = '127.0.0.1' if HTTP_API_LISTEN_IP in ('0.0.0.0', '::') else HTTP_API_LISTEN_IP
+    if ':' in host: host = f'[{host}]'
+    url = f'http://{host}:{HTTP_API_LISTEN_PORT}/cfgapi/fsxml/acl'
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(url, timeout=3) as response:
+                if response.status == 200: return True
+        except Exception:
+            pass
+        time.sleep(interval)
+    return False
+
+
 @threaded
 def fsinstance(data):
     if not LIBRE_STANDALONE_MODEL:
@@ -193,6 +212,11 @@ def fsinstance(data):
         clitemplate = _FSXML.get_template("etc/fs_cli.conf")
         clistream = clitemplate.render()
         with open(clifile, 'w') as clif: clif.write(clistream)
+
+        if waitliberatorapi():
+            logger.info(f"module=liberator, space=basemgr, action=fsinstance.waitapi, result=ready")
+        else:
+            logger.warning(f"module=liberator, space=basemgr, action=fsinstance.waitapi, result=timeout, message=[starting freeswitch anyway, config may be incomplete]")
 
         if LIBRE_CONTAINERIZED:
             SubRun(['/usr/local/bin/freeswitch', '-reincarnate'])
