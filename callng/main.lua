@@ -270,11 +270,20 @@ local function main()
             ::ENDFAILOVER::
         end
 
-        -- sleep to make sure channel available
-        InLeg:sleep(500)
+        -- wait for both legs to be ready before bridging: a mid-call
+        -- re-INVITE on either leg can drop switch_channel_ready() for a
+        -- moment, and freeswitch.bridge() silently no-ops if either side
+        -- isn't ready at the exact call instant
+        local BRIDGE_WAIT_MS = 2000
+        local BRIDGE_POLL_MS = 100
+        local bridge_waited_ms = 0
+        while (bridge_waited_ms < BRIDGE_WAIT_MS) and not (InLeg:ready() and OutLeg and OutLeg:ready()) do
+            InLeg:sleep(BRIDGE_POLL_MS)
+            bridge_waited_ms = bridge_waited_ms + BRIDGE_POLL_MS
+        end
 
         if OutLeg then
-            if( OutLeg:ready() ) then
+            if( InLeg:ready() and OutLeg:ready() ) then
                 -- log information for leg B
                 local _real_uuid = OutLeg:get_uuid()
                 if _uuid ~= _real_uuid then
@@ -301,7 +310,8 @@ local function main()
                     OutLeg:hangup()
                 end
             else
-                log.warning('module=callng, space=main, action=callstate, seshid=%s, info=outbound.leg.not.connected', NgVars.seshid)
+                log.warning('module=callng, space=main, action=bridge_skip, seshid=%s, inleg_ready=%s, outleg_ready=%s',
+                    NgVars.seshid, tostring(InLeg:ready()), tostring(OutLeg:ready()))
             end
         end
 
