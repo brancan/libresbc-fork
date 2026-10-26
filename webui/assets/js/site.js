@@ -954,30 +954,90 @@ function ShowToast(message, msgtype='danger'){
 // CDR
 // --------------------------------------------------
 
+function cdrLocalDate() {
+    var d = new Date();
+    var yyyy = d.getFullYear();
+    var mm = String(d.getMonth() + 1).padStart(2, '0');
+    var dd = String(d.getDate()).padStart(2, '0');
+    return yyyy + '-' + mm + '-' + dd;
+}
+
+var cdrOffset = 0;
+var cdrLimit = 200;
+var cdrTotal = 0;
+var cdrSearchTimer = null;
+
 (function() {
     var input = document.getElementById('cdr-date-input');
     if (input) {
-        var today = new Date().toISOString().slice(0, 10);
+        var today = cdrLocalDate();
         input.value = today;
         input.max = today;
     }
+    var search = document.getElementById('cdr-search-input');
+    if (search) {
+        search.addEventListener('input', function() {
+            clearTimeout(cdrSearchTimer);
+            cdrSearchTimer = setTimeout(function() {
+                cdrOffset = 0;
+                loadCDR();
+            }, 400);
+        });
+    }
 })();
+
+function cdrLoadFresh() {
+    cdrOffset = 0;
+    loadCDR();
+}
+
+function cdrPrevPage() {
+    cdrOffset = Math.max(0, cdrOffset - cdrLimit);
+    loadCDR();
+}
+
+function cdrNextPage() {
+    if (cdrOffset + cdrLimit < cdrTotal) {
+        cdrOffset += cdrLimit;
+        loadCDR();
+    }
+}
+
+function cdrUpdatePagingButtons() {
+    var prevBtn = document.getElementById('cdr-prev-btn');
+    var nextBtn = document.getElementById('cdr-next-btn');
+    if (prevBtn) prevBtn.disabled = cdrOffset <= 0;
+    if (nextBtn) nextBtn.disabled = cdrOffset + cdrLimit >= cdrTotal;
+}
 
 function loadCDR() {
     var input = document.getElementById('cdr-date-input');
-    var date = input ? input.value : new Date().toISOString().slice(0, 10);
+    var date = input ? input.value : cdrLocalDate();
+    var searchInput = document.getElementById('cdr-search-input');
+    var number = searchInput ? searchInput.value.trim() : '';
+    var url = '/libreapi/cdr/records?date=' + encodeURIComponent(date) + '&limit=' + cdrLimit + '&offset=' + cdrOffset;
+    if (number) {
+        url += '&number=' + encodeURIComponent(number);
+    }
     $.ajax({
         type: 'GET',
-        url: '/libreapi/cdr/records?date=' + encodeURIComponent(date) + '&limit=500',
-        success: function(data) {
+        url: url,
+        success: function(data, textStatus, jqXHR) {
             var tbody = document.getElementById('cdr-table-body');
             var count = document.getElementById('cdr-count');
+            var totalHeader = jqXHR.getResponseHeader('X-Total-Count');
+            cdrTotal = totalHeader !== null ? parseInt(totalHeader) : (Array.isArray(data) ? data.length : 0);
             if (!Array.isArray(data) || data.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No records</td></tr>';
-                if (count) count.textContent = '';
+                if (count) count.textContent = cdrTotal ? ('showing 0 of ' + cdrTotal) : 'No records';
+                cdrUpdatePagingButtons();
                 return;
             }
-            if (count) count.textContent = data.length + ' sessions';
+            if (count) {
+                var shownFrom = cdrOffset + 1;
+                var shownTo = cdrOffset + data.length;
+                count.textContent = 'showing ' + shownFrom + '-' + shownTo + ' of ' + cdrTotal;
+            }
             var rows = data.map(function(r) {
                 var ts = r.start_time ? new Date(parseInt(r.start_time) * 1000) : null;
                 var timeStr = ts ? ts.toLocaleTimeString() : '-';
@@ -999,6 +1059,7 @@ function loadCDR() {
                     '</tr>';
             });
             tbody.innerHTML = rows.join('');
+            cdrUpdatePagingButtons();
         },
         error: function(jqXHR) { LSBC.ajaxError(jqXHR); }
     });
