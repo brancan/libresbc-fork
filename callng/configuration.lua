@@ -41,7 +41,7 @@ ROUTE = 'route'
 HTTPR = 'httpr'
 EMPTYSTRING = ''
 --- CDR
-CDRTTL = tonumber(os.getenv('CDRTTL')) or 3600  -- configurable via env var; increase (e.g. 172800) to prevent silent CDR loss on liberator downtime
+CDRTTL = tonumber(os.getenv('CDRTTL')) or 172800  -- configurable via env var; defaults to 48h to prevent silent CDR loss on liberator downtime
 
 --- CONCURENT CALLS
 CONCURENTCALLS_TTL = 8*3600  -- orphaned UUIDs expire after 8h if FS is SIGKILL'd
