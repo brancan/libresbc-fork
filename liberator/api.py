@@ -40,7 +40,8 @@ async def tracking(request: Request, call_next) -> Response:
         response_body = response_body.decode()
         process_time = round(time.time() - start_time, 3)
         if url.startswith('/libreapi/'):
-            logger.info(f'module=liberator, space=httpapi, action=middleware, processtime={process_time}, requestid={get_request_uuid()}, clientip={clientip}, request={method}:{url}, status_code={status_code}, response_body={response_body}')
+            logbody = response_body if len(response_body) <= 1000 else f'{response_body[:1000]}...[truncated {len(response_body)} bytes]'
+            logger.info(f'module=liberator, space=httpapi, action=middleware, processtime={process_time}, requestid={get_request_uuid()}, clientip={clientip}, request={method}:{url}, status_code={status_code}, response_body={logbody}')
         else:
             logger.info(f'module=liberator, space=httpapi, action=middleware, processtime={process_time}, requestid={get_request_uuid()}, clientip={clientip}, request={method}:{url}, status_code={status_code}')
         _request_uuid_ctx_var.reset(request_uuid)
