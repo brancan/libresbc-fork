@@ -32,3 +32,9 @@ libreui-*
 
 # custom
 *.save
+
+# local artifacts
+/webui/libreui
+.atl/
+.windsurf/
+*.bak-*
