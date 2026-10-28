@@ -3332,13 +3332,18 @@ def get_active_channels(response: Response):
                     resp = fs.send('api show channels as json')
                     if resp and resp.data:
                         parsed = json.loads(resp.data)
+                        now = int(time.time())
                         for ch in parsed.get('rows', []):
+                            try:
+                                duration = max(0, now - int(ch.get('created_epoch')))
+                            except (TypeError, ValueError):
+                                duration = None
                             channels.append({
                                 'uuid':        ch.get('uuid'),
                                 'direction':   ch.get('direction'),
                                 'caller':      ch.get('cid_num'),
                                 'destination': ch.get('dest'),
-                                'duration':    ch.get('duration'),
+                                'duration':    duration,
                                 'callstate':   ch.get('callstate'),
                                 'nodeid':      nodeid,
                             })
