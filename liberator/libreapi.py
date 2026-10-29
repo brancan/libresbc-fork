@@ -3340,6 +3340,7 @@ def get_active_channels(response: Response):
                                 duration = None
                             channels.append({
                                 'uuid':        ch.get('uuid'),
+                                'call_uuid':   ch.get('call_uuid') or None,
                                 'direction':   ch.get('direction'),
                                 'caller':      ch.get('cid_num'),
                                 'destination': ch.get('dest'),
